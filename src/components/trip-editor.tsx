@@ -9,7 +9,11 @@ import { DayPlotter } from "./day-plotter";
 
 interface TripEditorProps {
   trip: Trip;
-  onSave: (updated: { title: string; days: TripDay[] }) => void;
+  onSave: (updated: {
+    title: string;
+    days: TripDay[];
+    password?: string;
+  }) => void;
   isSaving: boolean;
 }
 
@@ -30,6 +34,7 @@ function ensureDayForDate(days: TripDay[], date: string): TripDay[] {
 
 export function TripEditor({ trip, onSave, isSaving }: TripEditorProps) {
   const [title, setTitle] = useState(trip.title);
+  const [password, setPassword] = useState("");
   const [days, setDays] = useState<TripDay[]>(
     trip.days.length > 0
       ? trip.days
@@ -118,7 +123,11 @@ export function TripEditor({ trip, onSave, isSaving }: TripEditorProps) {
       .filter((d) => d.dateStart || d.items.length > 0)
       .map((d, i) => ({ ...d, sortOrder: i }));
     if (validDays.length === 0) return;
-    onSave({ title: title.trim() || trip.title, days: validDays });
+    onSave({
+      title: title.trim() || trip.title,
+      days: validDays,
+      password: password.trim() || undefined,
+    });
   };
 
   return (
@@ -134,6 +143,27 @@ export function TripEditor({ trip, onSave, isSaving }: TripEditorProps) {
           onChange={(e) => setTitle(e.target.value)}
           className="w-full rounded-lg border border-foreground/15 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
         />
+      </div>
+
+      <div>
+        <label
+          htmlFor="edit-trip-password"
+          className="block text-sm font-medium mb-1.5"
+        >
+          Trip password
+        </label>
+        <input
+          id="edit-trip-password"
+          type="password"
+          autoComplete="new-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Leave blank to keep the current password"
+          className="w-full rounded-lg border border-foreground/15 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 placeholder:text-foreground/30"
+        />
+        <p className="mt-1.5 text-xs text-foreground/40">
+          Optional. Enter a new password only if you want to change it.
+        </p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(260px,320px)_1fr] lg:items-start">

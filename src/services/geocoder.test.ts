@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { geocodeLocation, geocodeStops } from "./geocoder";
+import { geocodeLocation, geocodeStops, searchPlaces } from "./geocoder";
 import type { ParsedStop } from "@/types/itinerary";
 
 const mockFetch = vi.fn();
@@ -18,6 +18,39 @@ function nominatimResponse(lat: string, lon: string, displayName: string) {
 
 beforeEach(() => {
   mockFetch.mockReset();
+});
+
+describe("searchPlaces", () => {
+  it("returns multiple matches", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve([
+          {
+            lat: "35.66",
+            lon: "139.70",
+            display_name: "Shibuya, Tokyo",
+            place_id: 1,
+          },
+          {
+            lat: "35.68",
+            lon: "139.76",
+            display_name: "Shibuya Crossing area",
+            place_id: 2,
+          },
+        ]),
+    });
+
+    const results = await searchPlaces("Shibuya");
+    expect(results).toHaveLength(2);
+    expect(results[0].displayName).toBe("Shibuya, Tokyo");
+    expect(results[0].latitude).toBe(35.66);
+  });
+
+  it("returns empty array for blank query", async () => {
+    expect(await searchPlaces("   ")).toEqual([]);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
 });
 
 describe("geocodeLocation", () => {

@@ -14,6 +14,7 @@ import type { EnrichedStop } from "@/types/enrichment";
 import type { ActivitySuggestion } from "@/types/suggestions";
 import { stopsToDays } from "@/types/trip";
 import { hasValidCoordinates } from "@/lib/coordinates";
+import { tripPasswordHeaders } from "@/lib/trip-auth-client";
 import {
   getSidebarCollapsed,
   setSidebarSectionCollapsed,
@@ -75,6 +76,10 @@ export function TripMap({
     calendar: false,
     stops: false,
   });
+  const [mapView, setMapView] = useState<{
+    center: { lat: number; lon: number };
+    zoom: number;
+  } | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const suggestionMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const stopCardRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -193,7 +198,10 @@ export function TripMap({
       const days = stopsToDays(stops);
       const res = await fetch(`/api/trips/${shareToken}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...tripPasswordHeaders(shareToken),
+        },
         body: JSON.stringify({
           days: days.map((d, i) => ({
             ...d,
@@ -265,6 +273,16 @@ export function TripMap({
 
     map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
 
+    const syncView = () => {
+      if (!map.current) return;
+      const c = map.current.getCenter();
+      setMapView({
+        center: { lat: c.lat, lon: c.lng },
+        zoom: map.current.getZoom(),
+      });
+    };
+    map.current.on("moveend", syncView);
+
     map.current.on("load", () => {
       if (!map.current) return;
 
@@ -316,6 +334,8 @@ export function TripMap({
         mappedStops.forEach((s) => bounds.extend([s.longitude, s.latitude]));
         map.current.fitBounds(bounds, { padding: 60 });
       }
+
+      syncView();
     });
 
     return () => {
@@ -592,7 +612,8 @@ export function TripMap({
       {pickingPinIndex !== null && filteredStops[pickingPinIndex] && (
         <MapPicker
           initialCenter={
-            mappedStops.length > 0
+            mapView?.center ??
+            (mappedStops.length > 0
               ? {
                   lat:
                     mappedStops.reduce((s, p) => s + p.latitude, 0) /
@@ -601,8 +622,9 @@ export function TripMap({
                     mappedStops.reduce((s, p) => s + p.longitude, 0) /
                     mappedStops.length,
                 }
-              : undefined
+              : undefined)
           }
+          initialZoom={mapView?.zoom}
           latitude={
             hasValidCoordinates(filteredStops[pickingPinIndex])
               ? filteredStops[pickingPinIndex].latitude

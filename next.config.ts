@@ -1,7 +1,11 @@
 import type { NextConfig } from "next";
+import { withSerwist } from "@serwist/turbopack";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  turbopack: {
+    // Avoid picking a parent lockfile as the workspace root
+    root: process.cwd(),
+  },
 };
 
-export default nextConfig;
+export default withSerwist(nextConfig);

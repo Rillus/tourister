@@ -43,16 +43,48 @@ export async function geocodeLocation(
   query: string,
   options?: GeocodeOptions
 ): Promise<GeocodingResult | null> {
+  const results = await searchPlaces(query, { ...options, limit: 1 });
+  return results[0] ?? null;
+}
+
+export interface SearchPlacesOptions extends GeocodeOptions {
+  limit?: number;
+  /** Prefer results near this point (lon,lat) via Nominatim nearness bias */
+  near?: { latitude: number; longitude: number };
+}
+
+/** Search places and return multiple matches for the picker UI. */
+export async function searchPlaces(
+  query: string,
+  options?: SearchPlacesOptions
+): Promise<GeocodingResult[]> {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
   try {
+    const limit = Math.min(Math.max(options?.limit ?? 5, 1), 10);
     const params = new URLSearchParams({
-      q: query,
+      q: trimmed,
       format: "json",
-      limit: "3",
+      limit: String(limit),
     });
 
     if (options?.viewbox) {
       const { minLon, minLat, maxLon, maxLat } = options.viewbox;
       params.set("viewbox", `${minLon},${maxLat},${maxLon},${minLat}`);
+      params.set("bounded", "0");
+    }
+
+    if (options?.near) {
+      params.set(
+        "viewbox",
+        [
+          options.near.longitude - 0.5,
+          options.near.latitude + 0.5,
+          options.near.longitude + 0.5,
+          options.near.latitude - 0.5,
+        ].join(",")
+      );
     }
 
     const response = await fetch(`${NOMINATIM_BASE}?${params}`, {
@@ -63,22 +95,24 @@ export async function geocodeLocation(
     });
 
     if (!response.ok) {
-      return null;
+      return [];
     }
 
     const data = await response.json();
 
     if (!Array.isArray(data) || data.length === 0) {
-      return null;
+      return [];
     }
 
-    return {
-      latitude: parseFloat(data[0].lat),
-      longitude: parseFloat(data[0].lon),
-      displayName: data[0].display_name,
-    };
+    return data.map(
+      (item: { lat: string; lon: string; display_name: string }) => ({
+        latitude: parseFloat(item.lat),
+        longitude: parseFloat(item.lon),
+        displayName: item.display_name,
+      })
+    );
   } catch {
-    return null;
+    return [];
   }
 }
 

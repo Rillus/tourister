@@ -55,4 +55,20 @@ describe("CollapsibleSection", () => {
     fireEvent.click(screen.getByRole("button", { name: /stops/i }));
     expect(onCollapsedChange).toHaveBeenCalledWith(true);
   });
+
+  it("renders a visible chevron for expand/collapse", () => {
+    const { container } = render(
+      <CollapsibleSection
+        id="summary"
+        title="Summary"
+        collapsed={false}
+        onCollapsedChange={vi.fn()}
+      >
+        <p>Body</p>
+      </CollapsibleSection>
+    );
+    const chevron = container.querySelector("svg");
+    expect(chevron).toBeInTheDocument();
+    expect(chevron).toHaveClass("h-5", "w-5");
+  });
 });
