@@ -45,7 +45,6 @@ export function StopCard({
           : "hover:bg-foreground/[0.03] border border-foreground/8"
       }`}
     >
-      {/* Image banner */}
       {hasImage && (
         <div className="relative h-32 w-full overflow-hidden bg-foreground/5">
           <img
@@ -64,9 +63,12 @@ export function StopCard({
       )}
 
       <div className="p-3">
-        {/* Header */}
         <div className="flex items-start gap-2.5">
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white mt-0.5">
+          <span
+            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white mt-0.5 ${
+              mapped ? "bg-blue-600" : "bg-amber-600"
+            }`}
+          >
             {index + 1}
           </span>
           <div className="min-w-0 flex-1">
@@ -85,14 +87,12 @@ export function StopCard({
           </div>
         </div>
 
-        {/* Summary */}
         {enrichment?.wikipediaSummary && (
           <p className="mt-2 text-xs text-foreground/60 leading-relaxed line-clamp-3">
             {enrichment.wikipediaSummary}
           </p>
         )}
 
-        {/* Notes */}
         {editable && isSelected && onNotesChange ? (
           <textarea
             value={stop.notes ?? ""}
@@ -114,27 +114,41 @@ export function StopCard({
 
         {!mapped && (
           <div
-            className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-2"
+            className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-2"
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
           >
-            <p className="text-xs text-amber-800 dark:text-amber-200">
-              No location found — this stop won&apos;t appear on the map until
-              you place it.
+            <p className="text-xs text-amber-900 dark:text-amber-100 font-medium">
+              No location found
             </p>
-            {onDropPin && (
+            <p className="text-[11px] text-amber-800/80 dark:text-amber-200/80 mt-0.5">
+              This stop isn&apos;t on the map until you place a pin.
+            </p>
+            {onDropPin ? (
               <button
                 type="button"
                 onClick={onDropPin}
-                className="mt-1.5 rounded-md bg-amber-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-amber-700"
+                className="mt-2 w-full rounded-md bg-amber-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
               >
                 Drop pin
               </button>
-            )}
+            ) : null}
           </div>
         )}
 
-        {/* Wikipedia link */}
+        {mapped && onDropPin && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDropPin();
+            }}
+            className="mt-2 text-[11px] text-blue-600 hover:underline"
+          >
+            Move pin
+          </button>
+        )}
+
         {enrichment?.wikipediaUrl && (
           <a
             href={enrichment.wikipediaUrl}

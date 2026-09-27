@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { TripItem } from "@/types/trip";
 import { sortItemsByTime } from "@/types/trip";
+import { hasValidCoordinates } from "@/lib/coordinates";
 import {
   blockStyle,
   formatHour,
@@ -267,17 +268,32 @@ export function DayPlotter({
                         {item.startTime}
                         {item.endTime ? `–${item.endTime}` : ""}
                       </p>
+                      {!hasValidCoordinates(item) && (
+                        <p className="text-[10px] text-amber-200 mt-0.5">
+                          No location
+                        </p>
+                      )}
                     </div>
                     <div className="flex gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                       {onSetLocation && (
                         <button
                           type="button"
-                          aria-label={`Set location for ${item.name}`}
-                          title="Set location"
+                          aria-label={
+                            hasValidCoordinates(item)
+                              ? `Move pin for ${item.name}`
+                              : `Drop pin for ${item.name}`
+                          }
+                          title={
+                            hasValidCoordinates(item) ? "Move pin" : "Drop pin"
+                          }
                           onClick={() => onSetLocation(realIndex)}
-                          className="rounded px-1 text-[10px] hover:bg-white/20"
+                          className={`rounded px-1.5 py-0.5 text-[10px] font-semibold hover:bg-white/20 ${
+                            !hasValidCoordinates(item)
+                              ? "bg-amber-500 text-white"
+                              : ""
+                          }`}
                         >
-                          📍
+                          {hasValidCoordinates(item) ? "📍" : "Drop pin"}
                         </button>
                       )}
                       <button
@@ -301,6 +317,42 @@ export function DayPlotter({
             )}
           </div>
         </div>
+
+        {sorted.some((i) => !hasValidCoordinates(i)) && (
+          <div className="mt-3 space-y-2">
+            <p className="text-[10px] uppercase tracking-wide text-amber-700 dark:text-amber-300 font-medium">
+              Needs a pin
+            </p>
+            {sorted
+              .filter((i) => !hasValidCoordinates(i))
+              .map((item) => {
+                const sortedIndex = sorted.indexOf(item);
+                const realIndex = items.findIndex((i) => i === item);
+                return (
+                  <div
+                    key={`unmapped-${sortedIndex}`}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{item.name}</p>
+                      <p className="text-[11px] text-amber-800/80 dark:text-amber-200/80">
+                        No location found
+                      </p>
+                    </div>
+                    {onSetLocation && (
+                      <button
+                        type="button"
+                        onClick={() => onSetLocation(realIndex)}
+                        className="shrink-0 rounded-md bg-amber-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
+                      >
+                        Drop pin
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+        )}
 
         {sorted.some((i) => !i.startTime) && (
           <div className="mt-3 space-y-1">

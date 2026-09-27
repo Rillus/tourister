@@ -63,6 +63,8 @@ export function TripMap({
   const suggestionMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const stopCardRefs = useRef<(HTMLDivElement | null)[]>([]);
 
+  const allowPinEdit = Boolean(shareToken) || !readOnly;
+
   const handleShare = useCallback(() => {
     if (!shareUrl) return;
     void navigator.clipboard.writeText(shareUrl).then(() => {
@@ -159,7 +161,7 @@ export function TripMap({
   }, [selectedIndex, filteredStops, stops, readOnly]);
 
   const handleSave = useCallback(async () => {
-    if (!shareToken || readOnly) return;
+    if (!shareToken || !allowPinEdit) return;
     setIsSaving(true);
     try {
       const days = stopsToDays(stops);
@@ -187,7 +189,7 @@ export function TripMap({
     } finally {
       setIsSaving(false);
     }
-  }, [shareToken, stops, readOnly]);
+  }, [shareToken, stops, allowPinEdit]);
 
   const handleSuggestionsLoaded = useCallback((loaded: ActivitySuggestion[]) => {
     setSuggestions(loaded);
@@ -377,7 +379,7 @@ export function TripMap({
               {copyFeedback ? "Copied!" : "Share"}
             </button>
           )}
-          {hasUnsavedChanges && shareToken && !readOnly && (
+          {hasUnsavedChanges && shareToken && allowPinEdit && (
             <button
               onClick={handleSave}
               disabled={isSaving}
@@ -466,14 +468,14 @@ export function TripMap({
                         setSelectedIndex(index);
                         flyTo(stop);
                       }}
-                      editable={!readOnly}
+                      editable={allowPinEdit}
                       onNotesChange={
                         !readOnly
                           ? (notes) => handleUpdateNotes(index, notes)
                           : undefined
                       }
                       onDropPin={
-                        !readOnly && !hasValidCoordinates(stop)
+                        allowPinEdit
                           ? () => setPickingPinIndex(index)
                           : undefined
                       }
@@ -536,9 +538,23 @@ export function TripMap({
           initialCenter={
             mappedStops.length > 0
               ? {
-                  lat: mappedStops[0].latitude,
-                  lon: mappedStops[0].longitude,
+                  lat:
+                    mappedStops.reduce((s, p) => s + p.latitude, 0) /
+                    mappedStops.length,
+                  lon:
+                    mappedStops.reduce((s, p) => s + p.longitude, 0) /
+                    mappedStops.length,
                 }
+              : undefined
+          }
+          latitude={
+            hasValidCoordinates(filteredStops[pickingPinIndex])
+              ? filteredStops[pickingPinIndex].latitude
+              : undefined
+          }
+          longitude={
+            hasValidCoordinates(filteredStops[pickingPinIndex])
+              ? filteredStops[pickingPinIndex].longitude
               : undefined
           }
           onSelect={(lat, lon) => {

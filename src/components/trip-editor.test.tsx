@@ -126,11 +126,11 @@ describe("TripEditor", () => {
     expect(screen.getByText("Saving…")).toBeDisabled();
   });
 
-  it("opens map picker when Set location is clicked and updates item on confirm", () => {
+  it("opens map picker when Drop pin is clicked and updates item on confirm", () => {
     const onSave = vi.fn();
     render(<TripEditor trip={sampleTrip} onSave={onSave} isSaving={false} />);
 
-    fireEvent.click(screen.getByLabelText("Set location for Shibuya"));
+    fireEvent.click(screen.getByLabelText("Move pin for Shibuya"));
     expect(screen.getByTestId("map-picker")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Confirm location"));

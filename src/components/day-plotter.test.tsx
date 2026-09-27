@@ -6,8 +6,8 @@ import type { TripItem } from "@/types/trip";
 const items: TripItem[] = [
   {
     name: "teamLab Planets",
-    latitude: 0,
-    longitude: 0,
+    latitude: 35.65,
+    longitude: 139.79,
     startTime: "10:00",
     endTime: "12:00",
   },
@@ -74,5 +74,29 @@ describe("DayPlotter", () => {
     );
     fireEvent.click(screen.getByLabelText("Remove teamLab Planets"));
     expect(onChangeItems).toHaveBeenCalledWith([]);
+  });
+
+  it("shows Drop pin for activities without a location", () => {
+    const onSetLocation = vi.fn();
+    render(
+      <DayPlotter
+        date="2026-11-14"
+        items={[
+          {
+            name: "Mystery bar",
+            latitude: 0,
+            longitude: 0,
+            startTime: "19:00",
+          },
+        ]}
+        onChangeItems={vi.fn()}
+        onSetLocation={onSetLocation}
+      />
+    );
+
+    expect(screen.getByText("Needs a pin")).toBeInTheDocument();
+    expect(screen.getAllByText("No location found").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByText("Drop pin")[0]);
+    expect(onSetLocation).toHaveBeenCalledWith(0);
   });
 });
