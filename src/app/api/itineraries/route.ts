@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { itineraries, stops, enrichments } from "@/db/schema";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod/v4";
+import { hashPassword } from "@/lib/trip-password";
 
 const EnrichmentSchema = z.object({
   wikipediaSummary: z.string().optional(),
@@ -13,6 +14,7 @@ const EnrichmentSchema = z.object({
 
 const CreateItinerarySchema = z.object({
   title: z.string().min(1),
+  password: z.string().min(4),
   stops: z
     .array(
       z.object({
@@ -37,12 +39,14 @@ export async function POST(request: NextRequest) {
     const data = CreateItinerarySchema.parse(body);
 
     const shareToken = uuidv4().slice(0, 8);
+    const passwordHash = await hashPassword(data.password);
 
     const [itinerary] = await db
       .insert(itineraries)
       .values({
         title: data.title,
         shareToken,
+        passwordHash,
       })
       .returning();
 
@@ -88,7 +92,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       {
-        ...itinerary,
+        id: itinerary.id,
+        title: itinerary.title,
+        shareToken: itinerary.shareToken,
+        passwordProtected: true,
+        createdAt: itinerary.createdAt,
+        updatedAt: itinerary.updatedAt,
         stops: insertedStops,
       },
       { status: 201 }

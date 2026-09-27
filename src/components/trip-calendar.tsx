@@ -18,12 +18,15 @@ interface TripCalendarProps {
   days: TripDay[];
   selectedDate: string | null;
   onSelectDate: (date: string) => void;
+  /** Show compact weather under the grid (default true) */
+  showWeather?: boolean;
 }
 
 export function TripCalendar({
   days,
   selectedDate,
   onSelectDate,
+  showWeather = true,
 }: TripCalendarProps) {
   const range = tripDateRange(days);
   const initial = selectedDate
@@ -120,7 +123,7 @@ export function TripCalendar({
         })}
       </div>
 
-      {selectedDate && selectedWeatherAnchor && (
+      {showWeather && selectedDate && selectedWeatherAnchor && (
         <div className="mt-3 pt-2 border-t border-foreground/10">
           <DayWeatherBadge
             date={selectedDate}

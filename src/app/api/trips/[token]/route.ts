@@ -8,6 +8,8 @@ import {
 } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod/v4";
+import { assertTripPassword } from "@/lib/trip-auth";
+import { hashPassword } from "@/lib/trip-password";
 
 const EnrichmentSchema = z.object({
   wikipediaSummary: z.string().optional(),
@@ -40,6 +42,8 @@ const DaySchema = z.object({
 const UpdateTripSchema = z.object({
   title: z.string().min(1).optional(),
   days: z.array(DaySchema).optional(),
+  /** New password; omit or empty to leave unchanged */
+  password: z.string().min(4).optional(),
 });
 
 /**
@@ -72,13 +76,34 @@ export async function PATCH(
       );
     }
 
+    const auth = await assertTripPassword(itinerary.passwordHash, request);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: "Password required", locked: true },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
     const data = UpdateTripSchema.parse(body);
 
+    const itineraryUpdates: {
+      title?: string;
+      passwordHash?: string;
+      updatedAt: Date;
+    } = { updatedAt: new Date() };
+
     if (data.title) {
+      itineraryUpdates.title = data.title;
+    }
+    if (data.password?.trim()) {
+      itineraryUpdates.passwordHash = await hashPassword(data.password);
+    }
+
+    if (data.title || data.password?.trim()) {
       await db
         .update(itineraries)
-        .set({ title: data.title, updatedAt: new Date() })
+        .set(itineraryUpdates)
         .where(eq(itineraries.id, itinerary.id));
     }
 
@@ -161,8 +186,12 @@ export async function PATCH(
       .where(eq(itineraries.id, itinerary.id));
 
     return NextResponse.json({
-      ...updated,
+      id: updated.id,
+      title: updated.title,
       shareToken: updated.shareToken,
+      passwordProtected: Boolean(updated.passwordHash),
+      createdAt: updated.createdAt,
+      updatedAt: updated.updatedAt,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {

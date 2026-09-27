@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 interface ItineraryInputProps {
-  onParse: (text: string, title: string) => void;
+  onParse: (text: string, title: string, password: string) => void;
   isLoading: boolean;
 }
 
@@ -19,11 +19,14 @@ Day 14, 14 Nov: Tokyo (Departure)`;
 export function ItineraryInput({ onParse, isLoading }: ItineraryInputProps) {
   const [text, setText] = useState("");
   const [title, setTitle] = useState("");
+  const [password, setPassword] = useState("");
+
+  const canSubmit = Boolean(text.trim() && password.trim().length >= 4);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!text.trim()) return;
-    onParse(text, title || "My Trip");
+    if (!canSubmit) return;
+    onParse(text, title || "My Trip", password.trim());
   };
 
   return (
@@ -43,6 +46,26 @@ export function ItineraryInput({ onParse, isLoading }: ItineraryInputProps) {
           placeholder="e.g. Japan November 2026"
           className="w-full rounded-lg border border-foreground/15 bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 placeholder:text-foreground/30 transition"
         />
+      </div>
+      <div>
+        <label
+          htmlFor="trip-password"
+          className="block text-sm font-medium text-foreground/80 mb-1.5"
+        >
+          Trip password
+        </label>
+        <input
+          id="trip-password"
+          type="password"
+          autoComplete="new-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="At least 4 characters"
+          className="w-full rounded-lg border border-foreground/15 bg-background px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 placeholder:text-foreground/30 transition"
+        />
+        <p className="mt-1.5 text-xs text-foreground/40">
+          Needed to open the share link. Keep it somewhere safe.
+        </p>
       </div>
       <div>
         <label
@@ -66,7 +89,7 @@ export function ItineraryInput({ onParse, isLoading }: ItineraryInputProps) {
       </div>
       <button
         type="submit"
-        disabled={!text.trim() || isLoading}
+        disabled={!canSubmit || isLoading}
         className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500/40 disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
       >
         {isLoading ? "Parsing…" : "Parse itinerary"}

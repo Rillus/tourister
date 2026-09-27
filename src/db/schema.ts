@@ -24,6 +24,8 @@ export const itineraries = pgTable("itineraries", {
   id: uuid("id").defaultRandom().primaryKey(),
   title: text("title").notNull(),
   shareToken: text("share_token").unique().notNull(),
+  /** scrypt hash; null means unprotected (legacy) */
+  passwordHash: text("password_hash"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

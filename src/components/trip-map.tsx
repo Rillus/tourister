@@ -7,10 +7,19 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import { StopCard } from "./stop-card";
 import { SuggestionPanel } from "./suggestion-panel";
 import { MapPicker } from "./map-picker";
+import { TripCalendar } from "./trip-calendar";
+import { TripSummaryCard } from "./trip-summary-card";
+import { CollapsibleSection } from "./collapsible-section";
 import type { EnrichedStop } from "@/types/enrichment";
 import type { ActivitySuggestion } from "@/types/suggestions";
 import { stopsToDays } from "@/types/trip";
 import { hasValidCoordinates } from "@/lib/coordinates";
+import {
+  getSidebarCollapsed,
+  setSidebarSectionCollapsed,
+  type SidebarCollapsedState,
+  type SidebarSectionId,
+} from "@/lib/sidebar-collapse";
 
 /** Format YYYY-MM-DD as "1 Nov" */
 function formatShortDate(dateStr: string): string {
@@ -38,6 +47,7 @@ interface TripMapProps {
   shareUrl?: string | null;
   shareToken?: string | null;
   readOnly?: boolean;
+  title?: string;
 }
 
 export function TripMap({
@@ -47,6 +57,7 @@ export function TripMap({
   shareUrl,
   shareToken,
   readOnly,
+  title = "Trip",
 }: TripMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -59,11 +70,25 @@ export function TripMap({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [pickingPinIndex, setPickingPinIndex] = useState<number | null>(null);
+  const [collapsed, setCollapsed] = useState<SidebarCollapsedState>({
+    summary: false,
+    calendar: false,
+    stops: false,
+  });
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const suggestionMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const stopCardRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   const allowPinEdit = Boolean(shareToken) || !readOnly;
+
+  useEffect(() => {
+    setCollapsed(getSidebarCollapsed());
+  }, []);
+
+  const toggleSection = useCallback((id: SidebarSectionId, next: boolean) => {
+    setCollapsed((prev) => ({ ...prev, [id]: next }));
+    setSidebarSectionCollapsed(id, next);
+  }, []);
 
   const handleShare = useCallback(() => {
     if (!shareUrl) return;
@@ -74,6 +99,7 @@ export function TripMap({
   }, [shareUrl]);
 
   const days = getDaysFromStops(stops);
+  const tripDays = useMemo(() => stopsToDays(stops), [stops]);
   const filteredStops = useMemo(
     () =>
       activeDay === "all"
@@ -391,34 +417,7 @@ export function TripMap({
         </div>
       </div>
 
-      {/* Day-by-day tabs */}
-      {days.length > 0 && (
-        <div className="flex gap-1 px-3 py-2 border-b border-foreground/10 overflow-x-auto shrink-0">
-          <button
-            onClick={() => setActiveDay("all")}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition cursor-pointer ${
-              activeDay === "all"
-                ? "bg-blue-600 text-white"
-                : "bg-foreground/5 text-foreground/70 hover:bg-foreground/10"
-            }`}
-          >
-            All
-          </button>
-          {days.map(({ date, label }) => (
-            <button
-              key={date}
-              onClick={() => setActiveDay(date)}
-              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition cursor-pointer whitespace-nowrap ${
-                activeDay === date
-                  ? "bg-blue-600 text-white"
-                  : "bg-foreground/5 text-foreground/70 hover:bg-foreground/10"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Day-by-day tabs removed — calendar lives in the left sidebar */}
 
       <div className="flex flex-1 min-h-0 relative">
         {/* Sidebar toggle (mobile) */}
@@ -433,16 +432,72 @@ export function TripMap({
         {/* Sidebar - drawer on mobile, always visible on md+ */}
         <div
           className={`md:relative md:translate-x-0 md:shadow-none w-96 border-r border-foreground/10 overflow-y-auto shrink-0 bg-background
-            max-md:fixed max-md:left-0 max-md:top-[7rem] max-md:bottom-0 max-md:z-20 max-md:w-[min(20rem,85vw)] max-md:transition-transform max-md:duration-200 max-md:ease-out
+            max-md:fixed max-md:left-0 max-md:top-[3.25rem] max-md:bottom-0 max-md:z-20 max-md:w-[min(20rem,85vw)] max-md:transition-transform max-md:duration-200 max-md:ease-out
             ${sidebarOpen ? "max-md:translate-x-0 max-md:shadow-xl" : "max-md:-translate-x-full"}`}
         >
-          <div className="p-3 space-y-3">
+          <CollapsibleSection
+            id="summary"
+            title="Summary"
+            collapsed={collapsed.summary}
+            onCollapsedChange={(next) => toggleSection("summary", next)}
+          >
+            <TripSummaryCard
+              title={title}
+              stops={stops}
+              activeDay={activeDay}
+            />
+          </CollapsibleSection>
+
+          {tripDays.length > 0 && (
+            <CollapsibleSection
+              id="calendar"
+              title="Calendar"
+              collapsed={collapsed.calendar}
+              onCollapsedChange={(next) => toggleSection("calendar", next)}
+              headerAction={
+                activeDay !== "all" ? (
+                  <button
+                    type="button"
+                    onClick={() => setActiveDay("all")}
+                    className="text-[11px] font-medium text-blue-600 hover:text-blue-700 cursor-pointer"
+                  >
+                    All days
+                  </button>
+                ) : null
+              }
+            >
+              <TripCalendar
+                days={tripDays}
+                selectedDate={activeDay === "all" ? null : activeDay}
+                onSelectDate={(date) => setActiveDay(date)}
+                showWeather={false}
+              />
+            </CollapsibleSection>
+          )}
+
+          <CollapsibleSection
+            id="stops"
+            title="Stops"
+            collapsed={collapsed.stops}
+            onCollapsedChange={(next) => toggleSection("stops", next)}
+          >
+          <div className="space-y-3">
+            {activeDay !== "all" && (
+              <p className="text-[11px] text-foreground/50">
+                Showing{" "}
+                {days.find((d) => d.date === activeDay)?.label ??
+                  formatShortDate(activeDay)}{" "}
+                · {filteredStops.length} stop
+                {filteredStops.length !== 1 ? "s" : ""}
+              </p>
+            )}
             {filteredStops.map((stop, index) => {
               const prevStop = filteredStops[index - 1];
               const showDayDivider =
-                index === 0 ||
-                (stop.dateStart ?? "undated") !==
-                  (prevStop?.dateStart ?? "undated");
+                activeDay === "all" &&
+                (index === 0 ||
+                  (stop.dateStart ?? "undated") !==
+                    (prevStop?.dateStart ?? "undated"));
               const dayInfo = days.find((d) => d.date === stop.dateStart);
 
               return (
@@ -518,6 +573,7 @@ export function TripMap({
               </div>
             )}
           </div>
+          </CollapsibleSection>
         </div>
 
         {/* Sidebar backdrop (mobile) */}

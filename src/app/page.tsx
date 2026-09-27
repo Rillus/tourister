@@ -8,6 +8,7 @@ import { TripMap } from "@/components/trip-map";
 import type { ParsedItinerary, ParsedStop } from "@/types/itinerary";
 import type { EnrichedStop } from "@/types/enrichment";
 import { addSavedTripToken } from "@/lib/saved-trips";
+import { storeTripPassword } from "@/lib/trip-auth-client";
 
 type Step = "input" | "confirm" | "map";
 
@@ -15,6 +16,7 @@ export default function HomePage() {
   const [step, setStep] = useState<Step>("input");
   const [parsedItinerary, setParsedItinerary] =
     useState<ParsedItinerary | null>(null);
+  const [tripPassword, setTripPassword] = useState<string>("");
   const [enrichedStops, setEnrichedStops] = useState<EnrichedStop[]>([]);
   const [enrichmentRate, setEnrichmentRate] = useState<number>(0);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -23,9 +25,14 @@ export default function HomePage() {
   const [loadingMessage, setLoadingMessage] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
-  const handleParse = async (text: string, title: string) => {
+  const handleParse = async (
+    text: string,
+    title: string,
+    password: string
+  ) => {
     setIsLoading(true);
     setError(null);
+    setTripPassword(password);
     try {
       const res = await fetch("/api/parse", {
         method: "POST",
@@ -100,6 +107,7 @@ export default function HomePage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             title: parsedItinerary.title,
+            password: tripPassword,
             stops: enriched.map((s) => ({
               name: s.name,
               nameLocal: s.nameLocal,
@@ -116,6 +124,7 @@ export default function HomePage() {
         if (saveRes.ok) {
           const saved = await saveRes.json();
           addSavedTripToken(saved.shareToken);
+          storeTripPassword(saved.shareToken, tripPassword);
           setShareToken(saved.shareToken);
           const baseUrl =
             typeof window !== "undefined"
@@ -158,6 +167,7 @@ export default function HomePage() {
           enrichmentRate={enrichmentRate}
           shareUrl={shareUrl}
           shareToken={shareToken}
+          title={parsedItinerary?.title}
         />
       </div>
     );

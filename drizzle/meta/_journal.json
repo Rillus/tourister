@@ -22,6 +22,13 @@
       "when": 1790495714882,
       "tag": "0002_stops_start_end_time",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790501255329,
+      "tag": "0003_itineraries_password_hash",
+      "breakpoints": true
     }
   ]
 }

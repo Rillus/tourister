@@ -4,9 +4,10 @@ import { itineraries, stops, enrichments, days } from "@/db/schema";
 import { eq, asc, inArray } from "drizzle-orm";
 import type { EnrichedStop } from "@/types/enrichment";
 import type { Trip, TripDay, TripItem } from "@/types/trip";
+import { assertTripPassword } from "@/lib/trip-auth";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
   try {
@@ -27,6 +28,14 @@ export async function GET(
       return NextResponse.json(
         { error: "Itinerary not found" },
         { status: 404 }
+      );
+    }
+
+    const auth = await assertTripPassword(itinerary.passwordHash, request);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: "Password required", locked: true },
+        { status: 401 }
       );
     }
 
