@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { TripItem } from "@/types/trip";
 import { sortItemsByTime } from "@/types/trip";
 import { hasValidCoordinates } from "@/lib/coordinates";
+import { DayWeatherBadge } from "./day-weather-badge";
 import {
   blockStyle,
   formatHour,
@@ -54,6 +55,7 @@ export function DayPlotter({
   const hourHeight = 48;
   const timelineHeight =
     (TIMELINE_END_HOUR - TIMELINE_START_HOUR) * hourHeight;
+  const weatherAnchor = sorted.find(hasValidCoordinates) ?? items.find(hasValidCoordinates);
 
   const resetForm = () => {
     setName("");
@@ -123,6 +125,13 @@ export function DayPlotter({
                 <p className="text-xs text-foreground/50 mt-0.5">{dayName}</p>
               )
             )}
+            <div className="mt-2 max-w-sm">
+              <DayWeatherBadge
+                date={date}
+                latitude={weatherAnchor?.latitude}
+                longitude={weatherAnchor?.longitude}
+              />
+            </div>
           </div>
           <button
             type="button"

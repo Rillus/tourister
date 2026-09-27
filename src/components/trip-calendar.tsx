@@ -9,6 +9,8 @@ import {
   parseYearMonth,
   shiftMonth,
 } from "./trip-calendar-utils";
+import { DayWeatherBadge } from "./day-weather-badge";
+import { hasValidCoordinates } from "@/lib/coordinates";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -40,6 +42,12 @@ export function TripCalendar({
     () => new Set(days.map((d) => d.dateStart).filter(Boolean)),
     [days]
   );
+
+  const selectedWeatherAnchor = useMemo(() => {
+    if (!selectedDate) return null;
+    const day = days.find((d) => d.dateStart === selectedDate);
+    return day?.items.find(hasValidCoordinates) ?? null;
+  }, [days, selectedDate]);
 
   const label = new Date(Date.UTC(view.year, view.month - 1, 1)).toLocaleDateString(
     "en-GB",
@@ -111,6 +119,17 @@ export function TripCalendar({
           );
         })}
       </div>
+
+      {selectedDate && selectedWeatherAnchor && (
+        <div className="mt-3 pt-2 border-t border-foreground/10">
+          <DayWeatherBadge
+            date={selectedDate}
+            latitude={selectedWeatherAnchor.latitude}
+            longitude={selectedWeatherAnchor.longitude}
+            compact
+          />
+        </div>
+      )}
     </div>
   );
 }
