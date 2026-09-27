@@ -180,6 +180,59 @@ describe("StopCard", () => {
     expect(onNotesChange).toHaveBeenCalledWith("Updated notes");
   });
 
+  it("shows editable title when selected and editable", () => {
+    const onTitleChange = vi.fn();
+    render(
+      <StopCard
+        stop={bareStop}
+        index={0}
+        isSelected
+        onSelect={vi.fn()}
+        editable
+        onTitleChange={onTitleChange}
+      />
+    );
+
+    const input = screen.getByLabelText("Stop title");
+    expect(input).toHaveValue("Some Place");
+    fireEvent.change(input, { target: { value: "Kyoto Station" } });
+    expect(onTitleChange).toHaveBeenCalledWith("Kyoto Station");
+  });
+
+  it("offers Get details when enrichment is missing", () => {
+    const onFetchEnrichment = vi.fn();
+    render(
+      <StopCard
+        stop={bareStop}
+        index={0}
+        isSelected
+        onSelect={vi.fn()}
+        editable
+        onFetchEnrichment={onFetchEnrichment}
+      />
+    );
+
+    fireEvent.click(screen.getByText("Get details"));
+    expect(onFetchEnrichment).toHaveBeenCalled();
+  });
+
+  it("offers Refresh details when enrichment already exists", () => {
+    const onFetchEnrichment = vi.fn();
+    render(
+      <StopCard
+        stop={enrichedStop}
+        index={0}
+        isSelected
+        onSelect={vi.fn()}
+        editable
+        onFetchEnrichment={onFetchEnrichment}
+      />
+    );
+
+    fireEvent.click(screen.getByText("Refresh details"));
+    expect(onFetchEnrichment).toHaveBeenCalled();
+  });
+
   it("shows no location message and Drop pin when coordinates are missing", () => {
     const onDropPin = vi.fn();
     render(

@@ -11,7 +11,10 @@ interface StopCardProps {
   onSelect: () => void;
   editable?: boolean;
   onNotesChange?: (notes: string) => void;
+  onTitleChange?: (title: string) => void;
   onDropPin?: () => void;
+  onFetchEnrichment?: () => void;
+  isEnriching?: boolean;
 }
 
 export function StopCard({
@@ -21,12 +24,16 @@ export function StopCard({
   onSelect,
   editable,
   onNotesChange,
+  onTitleChange,
   onDropPin,
+  onFetchEnrichment,
+  isEnriching,
 }: StopCardProps) {
   const [imageError, setImageError] = useState(false);
   const enrichment = stop.enrichment;
   const hasImage = enrichment?.imageUrl && !imageError;
   const mapped = hasValidCoordinates(stop);
+  const hasEnrichment = Boolean(enrichment?.wikipediaSummary || enrichment?.imageUrl);
 
   return (
     <div
@@ -48,13 +55,13 @@ export function StopCard({
       {hasImage && (
         <div className="relative h-32 w-full overflow-hidden bg-foreground/5">
           <img
-            src={enrichment.imageUrl}
+            src={enrichment!.imageUrl}
             alt={stop.name}
             className="h-full w-full object-cover"
             onError={() => setImageError(true)}
             loading="lazy"
           />
-          {enrichment.imageAttribution && (
+          {enrichment?.imageAttribution && (
             <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1.5 py-0.5 text-[9px] text-white/80">
               {enrichment.imageAttribution}
             </span>
@@ -72,7 +79,19 @@ export function StopCard({
             {index + 1}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold truncate">{stop.name}</p>
+            {editable && isSelected && onTitleChange ? (
+              <input
+                type="text"
+                aria-label="Stop title"
+                value={stop.name}
+                onChange={(e) => onTitleChange(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+                className="w-full rounded border border-foreground/15 bg-background px-2 py-1 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500/40"
+              />
+            ) : (
+              <p className="text-sm font-semibold truncate">{stop.name}</p>
+            )}
             {stop.nameLocal && (
               <p className="text-xs text-foreground/50 mt-0.5">
                 {stop.nameLocal}
@@ -134,6 +153,24 @@ export function StopCard({
               </button>
             ) : null}
           </div>
+        )}
+
+        {editable && isSelected && onFetchEnrichment && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onFetchEnrichment();
+            }}
+            disabled={isEnriching}
+            className="mt-2 w-full rounded-md border border-foreground/15 px-2.5 py-1.5 text-xs font-medium text-foreground/70 hover:bg-foreground/5 disabled:opacity-50 cursor-pointer"
+          >
+            {isEnriching
+              ? "Fetching…"
+              : hasEnrichment
+                ? "Refresh details"
+                : "Get details"}
+          </button>
         )}
 
         {mapped && onDropPin && (

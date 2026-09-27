@@ -8,8 +8,9 @@ const RATE_LIMIT_MS = 200;
 const StopSchema = z.object({
   name: z.string().min(1),
   nameLocal: z.string().optional(),
-  latitude: z.number(),
-  longitude: z.number(),
+  /** Optional — enrichment is name-based; coords are passed through unchanged */
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
   dateStart: z.string().optional(),
   dateEnd: z.string().optional(),
   notes: z.string().optional(),
@@ -38,6 +39,8 @@ export async function POST(request: NextRequest) {
 
       enrichedStops.push({
         ...stop,
+        latitude: stop.latitude ?? 0,
+        longitude: stop.longitude ?? 0,
         ...(enrichment?.nameLocal && { nameLocal: enrichment.nameLocal }),
         enrichment: enrichment
           ? {

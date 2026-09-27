@@ -71,6 +71,7 @@ export function TripMap({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [pickingPinIndex, setPickingPinIndex] = useState<number | null>(null);
+  const [enrichingIndex, setEnrichingIndex] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState<SidebarCollapsedState>({
     summary: false,
     calendar: false,
@@ -162,6 +163,66 @@ export function TripMap({
     });
     setHasUnsavedChanges(true);
   }, [filteredStops]);
+
+  const handleUpdateTitle = useCallback((index: number, name: string) => {
+    setStops((prev) => {
+      const updated = [...prev];
+      const fullIndex = prev.findIndex((s) => s === filteredStops[index]);
+      if (fullIndex < 0) return prev;
+      updated[fullIndex] = { ...updated[fullIndex], name };
+      return updated;
+    });
+    setHasUnsavedChanges(true);
+  }, [filteredStops]);
+
+  const handleFetchEnrichment = useCallback(
+    async (index: number) => {
+      const stop = filteredStops[index];
+      if (!stop?.name.trim()) return;
+      setEnrichingIndex(index);
+      try {
+        const res = await fetch("/api/enrich", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            stops: [
+              {
+                name: stop.name,
+                nameLocal: stop.nameLocal,
+                latitude: stop.latitude,
+                longitude: stop.longitude,
+                dateStart: stop.dateStart,
+                dateEnd: stop.dateEnd,
+                notes: stop.notes,
+              },
+            ],
+          }),
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          stops?: EnrichedStop[];
+        };
+        const enriched = data.stops?.[0];
+        if (!enriched) return;
+
+        setStops((prev) => {
+          const updated = [...prev];
+          const fullIndex = prev.findIndex((s) => s === filteredStops[index]);
+          if (fullIndex < 0) return prev;
+          updated[fullIndex] = {
+            ...updated[fullIndex],
+            nameLocal: enriched.nameLocal ?? updated[fullIndex].nameLocal,
+            enrichment: enriched.enrichment,
+          };
+          return updated;
+        });
+        setHasUnsavedChanges(true);
+      } finally {
+        setEnrichingIndex(null);
+      }
+    },
+    [filteredStops]
+  );
 
   const handleAddActivity = useCallback(() => {
     if (readOnly) return;
@@ -544,6 +605,11 @@ export function TripMap({
                         flyTo(stop);
                       }}
                       editable={allowPinEdit}
+                      onTitleChange={
+                        !readOnly
+                          ? (name) => handleUpdateTitle(index, name)
+                          : undefined
+                      }
                       onNotesChange={
                         !readOnly
                           ? (notes) => handleUpdateNotes(index, notes)
@@ -554,6 +620,12 @@ export function TripMap({
                           ? () => setPickingPinIndex(index)
                           : undefined
                       }
+                      onFetchEnrichment={
+                        !readOnly
+                          ? () => void handleFetchEnrichment(index)
+                          : undefined
+                      }
+                      isEnriching={enrichingIndex === index}
                     />
                 {/* Show suggestions panel and add activity under the selected stop */}
                 {selectedIndex === index &&
