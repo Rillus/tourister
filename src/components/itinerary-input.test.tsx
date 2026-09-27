@@ -30,6 +30,9 @@ describe("ItineraryInput", () => {
     expect(
       screen.getByRole("button", { name: "Parse itinerary" })
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /itinerary format/i })
+    ).toHaveAttribute("href", "/format");
   });
 
   it("disables the submit button when textarea is empty", () => {

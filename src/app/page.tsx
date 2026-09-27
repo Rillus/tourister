@@ -181,12 +181,17 @@ export default function HomePage() {
           <p className="text-sm text-foreground/50 mt-1">
             Transform your itinerary into an interactive map
           </p>
-          <Link
-            href="/trips"
-            className="inline-block mt-3 text-sm text-blue-600 hover:text-blue-700"
-          >
-            My saved trips →
-          </Link>
+          <div className="mt-3 flex items-center justify-center gap-3 text-sm">
+            <Link href="/trips" className="text-blue-600 hover:text-blue-700">
+              My saved trips
+            </Link>
+            <span className="text-foreground/25" aria-hidden>
+              ·
+            </span>
+            <Link href="/format" className="text-blue-600 hover:text-blue-700">
+              Itinerary format
+            </Link>
+          </div>
         </div>
 
         {/* Step indicator */}

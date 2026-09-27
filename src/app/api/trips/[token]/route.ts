@@ -238,3 +238,50 @@ export async function PATCH(
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
+/**
+ * DELETE /api/trips/[token]
+ * Permanently delete a trip (cascade removes days, stops, enrichments).
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ token: string }> }
+) {
+  try {
+    const { token } = await params;
+    if (!token) {
+      return NextResponse.json(
+        { error: "Token required" },
+        { status: 400 }
+      );
+    }
+
+    const [itinerary] = await db
+      .select()
+      .from(itineraries)
+      .where(eq(itineraries.shareToken, token));
+
+    if (!itinerary) {
+      return NextResponse.json(
+        { error: "Trip not found" },
+        { status: 404 }
+      );
+    }
+
+    const auth = await assertTripPassword(itinerary.passwordHash, request);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: "Password required", locked: true },
+        { status: 401 }
+      );
+    }
+
+    await db.delete(itineraries).where(eq(itineraries.id, itinerary.id));
+
+    return NextResponse.json({ deleted: true, shareToken: token });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to delete trip";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

@@ -1,20 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { ITINERARY_FORMAT_EXAMPLE } from "@/lib/itinerary-format";
 
 interface ItineraryInputProps {
   onParse: (text: string, title: string, password: string) => void;
   isLoading: boolean;
 }
-
-const PLACEHOLDER = `Day 1-3, 1-3 Nov: Tokyo (Explore Shibuya, Harajuku, Akihabara)
-Day 4, 4 Nov: Nikko (Toshogu Shrine, autumn leaves)
-Day 5-6, 5-6 Nov: Hakone (Onsen, Open-Air Museum, Lake Ashi)
-Day 7-9, 7-9 Nov: Kyoto (Temples, Arashiyama, Fushimi Inari)
-Day 10, 10 Nov: Nara (Todai-ji, deer park)
-Day 11-12, 11-12 Nov: Osaka (Dotonbori, street food, Osaka Castle)
-Day 13, 13 Nov: Hiroshima (Peace Memorial, Itsukushima Shrine)
-Day 14, 14 Nov: Tokyo (Departure)`;
 
 export function ItineraryInput({ onParse, isLoading }: ItineraryInputProps) {
   const [text, setText] = useState("");
@@ -79,12 +72,18 @@ export function ItineraryInput({ onParse, isLoading }: ItineraryInputProps) {
           rows={10}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={PLACEHOLDER}
+          placeholder={ITINERARY_FORMAT_EXAMPLE.trim()}
           className="w-full rounded-lg border border-foreground/15 bg-background px-4 py-3 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/40 placeholder:text-foreground/20 transition resize-y"
         />
         <p className="mt-1.5 text-xs text-foreground/40">
-          One stop per line. Dates, notes in parentheses, and &ldquo;Day
-          X&rdquo; prefixes are all supported.
+          One stop per line. See the{" "}
+          <Link
+            href="/format"
+            className="text-blue-600 hover:text-blue-700 underline-offset-2 hover:underline"
+          >
+            itinerary format
+          </Link>{" "}
+          for dates, notes, times, and a full example.
         </p>
       </div>
       <button

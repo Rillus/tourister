@@ -307,7 +307,9 @@ export function parseItineraryText(
   const stops: ParsedStop[] = [];
 
   for (const line of lines) {
-    const stop = parseLine(line);
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const stop = parseLine(trimmed);
     if (stop) {
       stops.push(stop);
     }

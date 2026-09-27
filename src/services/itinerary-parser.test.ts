@@ -98,6 +98,18 @@ Osaka`;
     expect(result.stops).toHaveLength(3);
   });
 
+  it("skips # comment lines", () => {
+    const input = `# Japan 2026
+Day 1 (13 Nov 2026) - Tokyo Haneda - Land at HND T3 ~10:25
+# ignore me
+Day 2 (14 Nov 2026) - Shibuya - Explore`;
+
+    const result = parseItineraryText(input);
+    expect(result.stops).toHaveLength(2);
+    expect(result.stops[0].name).toBe("Tokyo Haneda");
+    expect(result.stops[1].name).toBe("Shibuya");
+  });
+
   it("trims whitespace from location names", () => {
     const input = `  Tokyo  
   Kyoto  `;
