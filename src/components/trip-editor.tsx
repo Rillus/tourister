@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import Link from "next/link";
 import type { Trip, TripDay, TripItem } from "@/types/trip";
 import { MapPicker } from "./map-picker";
 import { TripCalendar } from "./trip-calendar";
 import { DayPlotter } from "./day-plotter";
+import type { SaveStatus } from "@/lib/auto-save";
 
 interface TripEditorProps {
   trip: Trip;
@@ -14,7 +15,14 @@ interface TripEditorProps {
     days: TripDay[];
     password?: string;
   }) => void;
+  /** Fired on every draft change for debounced auto-save */
+  onChange?: (updated: {
+    title: string;
+    days: TripDay[];
+    password?: string;
+  }) => void;
   isSaving: boolean;
+  saveStatus?: SaveStatus;
 }
 
 function ensureDayForDate(days: TripDay[], date: string): TripDay[] {
@@ -32,7 +40,13 @@ function ensureDayForDate(days: TripDay[], date: string): TripDay[] {
   ].sort((a, b) => a.dateStart.localeCompare(b.dateStart));
 }
 
-export function TripEditor({ trip, onSave, isSaving }: TripEditorProps) {
+export function TripEditor({
+  trip,
+  onSave,
+  onChange,
+  isSaving,
+  saveStatus,
+}: TripEditorProps) {
   const [title, setTitle] = useState(trip.title);
   const [password, setPassword] = useState("");
   const [days, setDays] = useState<TripDay[]>(
@@ -47,6 +61,26 @@ export function TripEditor({ trip, onSave, isSaving }: TripEditorProps) {
             items: [],
           },
         ]
+  );
+  const readyRef = useRef(false);
+  useEffect(() => {
+    readyRef.current = true;
+  }, []);
+
+  const emitChange = useCallback(
+    (next: { title: string; days: TripDay[]; password: string }) => {
+      if (!readyRef.current || !onChange) return;
+      const validDays = next.days
+        .filter((d) => d.dateStart || d.items.length > 0)
+        .map((d, i) => ({ ...d, sortOrder: i }));
+      if (validDays.length === 0) return;
+      onChange({
+        title: next.title.trim() || trip.title,
+        days: validDays,
+        password: next.password.trim() || undefined,
+      });
+    },
+    [onChange, trip.title]
   );
   const [selectedDate, setSelectedDate] = useState<string | null>(() => {
     const first = trip.days.find((d) => d.dateStart)?.dateStart;
@@ -65,10 +99,17 @@ export function TripEditor({ trip, onSave, isSaving }: TripEditorProps) {
   const selectedDay =
     selectedDayIndex >= 0 ? days[selectedDayIndex] : null;
 
-  const handleSelectDate = useCallback((date: string) => {
-    setDays((prev) => ensureDayForDate(prev, date));
-    setSelectedDate(date);
-  }, []);
+  const handleSelectDate = useCallback(
+    (date: string) => {
+      setDays((prev) => {
+        const next = ensureDayForDate(prev, date);
+        emitChange({ title, days: next, password });
+        return next;
+      });
+      setSelectedDate(date);
+    },
+    [emitChange, title, password]
+  );
 
   const updateSelectedDay = useCallback(
     (updater: (d: TripDay) => TripDay) => {
@@ -76,10 +117,11 @@ export function TripEditor({ trip, onSave, isSaving }: TripEditorProps) {
       setDays((prev) => {
         const next = [...prev];
         next[selectedDayIndex] = updater(next[selectedDayIndex]);
+        emitChange({ title, days: next, password });
         return next;
       });
     },
-    [selectedDayIndex]
+    [selectedDayIndex, emitChange, title, password]
   );
 
   const mapPickerContext = useMemo(() => {
@@ -140,7 +182,11 @@ export function TripEditor({ trip, onSave, isSaving }: TripEditorProps) {
           id="title"
           type="text"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => {
+            const next = e.target.value;
+            setTitle(next);
+            emitChange({ title: next, days, password });
+          }}
           className="w-full rounded-lg border border-foreground/15 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
         />
       </div>
@@ -157,7 +203,11 @@ export function TripEditor({ trip, onSave, isSaving }: TripEditorProps) {
           type="password"
           autoComplete="new-password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) => {
+            const next = e.target.value;
+            setPassword(next);
+            emitChange({ title, days, password: next });
+          }}
           placeholder="Leave blank to keep the current password"
           className="w-full rounded-lg border border-foreground/15 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 placeholder:text-foreground/30"
         />
@@ -195,14 +245,31 @@ export function TripEditor({ trip, onSave, isSaving }: TripEditorProps) {
         )}
       </div>
 
-      <div className="flex gap-3">
+      <div className="flex gap-3 items-center">
         <button
           type="submit"
           disabled={isSaving}
           className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isSaving ? "Saving…" : "Save changes"}
+          {isSaving ? "Saving…" : "Done"}
         </button>
+        {saveStatus && saveStatus !== "idle" && (
+          <span
+            className={`text-xs shrink-0 ${
+              saveStatus === "error"
+                ? "text-red-600"
+                : saveStatus === "saved"
+                  ? "text-foreground/40"
+                  : "text-amber-700"
+            }`}
+            aria-live="polite"
+          >
+            {saveStatus === "pending" && "Unsaved…"}
+            {saveStatus === "saving" && "Saving…"}
+            {saveStatus === "saved" && "Saved"}
+            {saveStatus === "error" && "Save failed"}
+          </span>
+        )}
         <Link
           href="/trips"
           className="rounded-lg border border-foreground/15 px-4 py-2.5 text-sm font-medium hover:bg-foreground/5"
@@ -238,6 +305,7 @@ export function TripEditor({ trip, onSave, isSaving }: TripEditorProps) {
                 longitude: lon,
               };
               next[mapPickerContext.dayIndex] = { ...day, items };
+              emitChange({ title, days: next, password });
               return next;
             });
             setPickingFor(null);

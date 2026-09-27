@@ -16,6 +16,10 @@ import { stopsToDays } from "@/types/trip";
 import { hasValidCoordinates } from "@/lib/coordinates";
 import { tripPasswordHeaders } from "@/lib/trip-auth-client";
 import {
+  createDebouncedSaver,
+  type SaveStatus,
+} from "@/lib/auto-save";
+import {
   getSidebarCollapsed,
   setSidebarSectionCollapsed,
   type SidebarCollapsedState,
@@ -68,8 +72,7 @@ export function TripMap({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<ActivitySuggestion[]>([]);
   const [copyFeedback, setCopyFeedback] = useState(false);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [pickingPinIndex, setPickingPinIndex] = useState<number | null>(null);
   const [enrichingIndex, setEnrichingIndex] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState<SidebarCollapsedState>({
@@ -84,11 +87,89 @@ export function TripMap({
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const suggestionMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const stopCardRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const stopsRef = useRef(stops);
+  stopsRef.current = stops;
+  const saverRef = useRef<ReturnType<typeof createDebouncedSaver> | null>(null);
 
   const allowPinEdit = Boolean(shareToken) || !readOnly;
 
   useEffect(() => {
     setCollapsed(getSidebarCollapsed());
+  }, []);
+
+  useEffect(() => {
+    if (!shareToken || !allowPinEdit) {
+      saverRef.current?.cancel();
+      saverRef.current = null;
+      return;
+    }
+
+    saverRef.current = createDebouncedSaver(
+      async () => {
+        const current = stopsRef.current;
+        const days = stopsToDays(current);
+        const res = await fetch(`/api/trips/${shareToken}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            ...tripPasswordHeaders(shareToken),
+          },
+          body: JSON.stringify({
+            days: days.map((d, i) => ({
+              dateStart: d.dateStart,
+              dateEnd: d.dateEnd,
+              name: d.name,
+              sortOrder: i,
+              items: d.items.map((item) => ({
+                name: item.name,
+                nameLocal: item.nameLocal,
+                latitude: item.latitude,
+                longitude: item.longitude,
+                notes: item.notes,
+                startTime: item.startTime,
+                endTime: item.endTime,
+                enrichment: item.enrichment,
+              })),
+            })),
+          }),
+        });
+        if (!res.ok) throw new Error("Save failed");
+      },
+      800,
+      setSaveStatus
+    );
+
+    const flush = () => {
+      void saverRef.current?.flush();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      flush();
+      saverRef.current?.cancel();
+      saverRef.current = null;
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [shareToken, allowPinEdit]);
+
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (saveStatus === "pending" || saveStatus === "saving") {
+        e.preventDefault();
+        void saverRef.current?.flush();
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [saveStatus]);
+
+  const markDirty = useCallback(() => {
+    saverRef.current?.schedule();
   }, []);
 
   const toggleSection = useCallback((id: SidebarSectionId, next: boolean) => {
@@ -148,9 +229,9 @@ export function TripMap({
         updated.splice(insertAt, 0, newStop);
         return updated;
       });
-      setHasUnsavedChanges(true);
+      markDirty();
     },
-    [selectedIndex, filteredStops, allowPinEdit]
+    [selectedIndex, filteredStops, allowPinEdit, markDirty]
   );
 
   const handleUpdateNotes = useCallback((index: number, notes: string) => {
@@ -161,8 +242,8 @@ export function TripMap({
       updated[fullIndex] = { ...updated[fullIndex], notes };
       return updated;
     });
-    setHasUnsavedChanges(true);
-  }, [filteredStops]);
+    markDirty();
+  }, [filteredStops, markDirty]);
 
   const handleUpdateTitle = useCallback((index: number, name: string) => {
     setStops((prev) => {
@@ -172,8 +253,8 @@ export function TripMap({
       updated[fullIndex] = { ...updated[fullIndex], name };
       return updated;
     });
-    setHasUnsavedChanges(true);
-  }, [filteredStops]);
+    markDirty();
+  }, [filteredStops, markDirty]);
 
   const handleFetchEnrichment = useCallback(
     async (index: number) => {
@@ -216,12 +297,12 @@ export function TripMap({
           };
           return updated;
         });
-        setHasUnsavedChanges(true);
+        markDirty();
       } finally {
         setEnrichingIndex(null);
       }
     },
-    [filteredStops]
+    [filteredStops, markDirty]
   );
 
   const handleAddActivity = useCallback(() => {
@@ -249,42 +330,8 @@ export function TripMap({
       updated.splice(insertAt, 0, newStop);
       return updated;
     });
-    setHasUnsavedChanges(true);
-  }, [selectedIndex, filteredStops, stops, allowPinEdit]);
-
-  const handleSave = useCallback(async () => {
-    if (!shareToken || !allowPinEdit) return;
-    setIsSaving(true);
-    try {
-      const days = stopsToDays(stops);
-      const res = await fetch(`/api/trips/${shareToken}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...tripPasswordHeaders(shareToken),
-        },
-        body: JSON.stringify({
-          days: days.map((d, i) => ({
-            ...d,
-            sortOrder: i,
-            items: d.items.map((item) => ({
-              name: item.name,
-              nameLocal: item.nameLocal,
-              latitude: item.latitude,
-              longitude: item.longitude,
-              notes: item.notes,
-              startTime: item.startTime,
-              endTime: item.endTime,
-              enrichment: item.enrichment,
-            })),
-          })),
-        }),
-      });
-      if (res.ok) setHasUnsavedChanges(false);
-    } finally {
-      setIsSaving(false);
-    }
-  }, [shareToken, stops, allowPinEdit]);
+    markDirty();
+  }, [selectedIndex, filteredStops, stops, allowPinEdit, markDirty]);
 
   const handleSuggestionsLoaded = useCallback((loaded: ActivitySuggestion[]) => {
     setSuggestions(loaded);
@@ -486,14 +533,30 @@ export function TripMap({
               {copyFeedback ? "Copied!" : "Share"}
             </button>
           )}
-          {hasUnsavedChanges && shareToken && allowPinEdit && (
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-50 transition cursor-pointer"
+          {shareToken && allowPinEdit && saveStatus !== "idle" && (
+            <span
+              className={`text-xs ${
+                saveStatus === "error"
+                  ? "text-red-600"
+                  : saveStatus === "saved"
+                    ? "text-foreground/40"
+                    : "text-amber-700"
+              }`}
+              aria-live="polite"
             >
-              {isSaving ? "Saving…" : "Save"}
-            </button>
+              {saveStatus === "pending" && "Unsaved…"}
+              {saveStatus === "saving" && "Saving…"}
+              {saveStatus === "saved" && "Saved"}
+              {saveStatus === "error" && (
+                <button
+                  type="button"
+                  className="underline cursor-pointer"
+                  onClick={() => void saverRef.current?.flush()}
+                >
+                  Save failed — retry
+                </button>
+              )}
+            </span>
           )}
         </div>
       </div>
@@ -721,7 +784,7 @@ export function TripMap({
               };
               return updated;
             });
-            setHasUnsavedChanges(true);
+            markDirty();
             setPickingPinIndex(null);
             setSelectedIndex(pickingPinIndex);
           }}

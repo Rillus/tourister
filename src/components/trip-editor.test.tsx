@@ -77,7 +77,7 @@ describe("TripEditor", () => {
     const onSave = vi.fn();
     render(<TripEditor trip={sampleTrip} onSave={onSave} isSaving={false} />);
 
-    fireEvent.click(screen.getByText("Save changes"));
+    fireEvent.click(screen.getByText("Done"));
 
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -112,7 +112,7 @@ describe("TripEditor", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
-    fireEvent.click(screen.getByText("Save changes"));
+    fireEvent.click(screen.getByText("Done"));
     const saved = onSave.mock.calls[0][0].days[0].items;
     expect(saved.some((i: { name: string }) => i.name === "Harajuku")).toBe(
       true
@@ -136,7 +136,7 @@ describe("TripEditor", () => {
     fireEvent.click(screen.getByText("Confirm location"));
     expect(screen.queryByTestId("map-picker")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("Save changes"));
+    fireEvent.click(screen.getByText("Done"));
     const savedItems = onSave.mock.calls[0][0].days[0].items;
     expect(savedItems[0]).toMatchObject({ latitude: 35.5, longitude: 139.7 });
   });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TripEditor } from "@/components/trip-editor";
@@ -11,6 +11,16 @@ import {
   storeTripPassword,
   tripPasswordHeaders,
 } from "@/lib/trip-auth-client";
+import {
+  createDebouncedSaver,
+  type SaveStatus,
+} from "@/lib/auto-save";
+
+type TripDraft = {
+  title: string;
+  days: TripDay[];
+  password?: string;
+};
 
 export default function EditTripPage({
   params,
@@ -22,14 +32,94 @@ export default function EditTripPage({
   const [trip, setTrip] = useState<Trip | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [locked, setLocked] = useState(false);
   const [checkingPassword, setCheckingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const draftRef = useRef<TripDraft | null>(null);
+  const saverRef = useRef<ReturnType<typeof createDebouncedSaver> | null>(null);
 
   useEffect(() => {
     params.then((p) => setToken(p.token));
   }, [params]);
+
+  const persistDraft = useCallback(
+    async (updated: TripDraft, { redirect }: { redirect: boolean }) => {
+      if (!token) return;
+      const body: Record<string, unknown> = {
+        title: updated.title,
+        days: updated.days.map((d) => ({
+          dateStart: d.dateStart,
+          dateEnd: d.dateEnd,
+          name: d.name,
+          sortOrder: d.sortOrder,
+          items: d.items.map((item) => ({
+            name: item.name,
+            nameLocal: item.nameLocal,
+            latitude: item.latitude,
+            longitude: item.longitude,
+            notes: item.notes,
+            startTime: item.startTime,
+            endTime: item.endTime,
+            enrichment: item.enrichment,
+          })),
+        })),
+      };
+      if (updated.password?.trim()) {
+        body.password = updated.password.trim();
+      }
+
+      const res = await fetch(`/api/trips/${token}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...tripPasswordHeaders(token),
+        },
+        body: JSON.stringify(body),
+      });
+      if (res.status === 401) {
+        setLocked(true);
+        throw new Error("Password required");
+      }
+      if (!res.ok) throw new Error("Save failed");
+      if (updated.password?.trim()) {
+        storeTripPassword(token, updated.password.trim());
+      }
+      if (redirect) {
+        router.push(`/share/${token}`);
+      }
+    },
+    [token, router]
+  );
+
+  useEffect(() => {
+    if (!token) return;
+    saverRef.current = createDebouncedSaver(
+      async () => {
+        const draft = draftRef.current;
+        if (!draft) return;
+        await persistDraft(draft, { redirect: false });
+      },
+      800,
+      setSaveStatus
+    );
+    const flush = () => {
+      void saverRef.current?.flush();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flush();
+    };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      flush();
+      saverRef.current?.cancel();
+      saverRef.current = null;
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [token, persistDraft]);
 
   const loadTrip = useCallback(
     async (password?: string) => {
@@ -90,62 +180,26 @@ export default function EditTripPage({
     void loadTrip();
   }, [token, loadTrip]);
 
+  const handleChange = useCallback((updated: TripDraft) => {
+    draftRef.current = updated;
+    saverRef.current?.schedule();
+  }, []);
+
   const handleSave = useCallback(
-    async (updated: {
-      title: string;
-      days: TripDay[];
-      password?: string;
-    }) => {
+    async (updated: TripDraft) => {
       if (!token) return;
       setSaving(true);
+      draftRef.current = updated;
       try {
-        const body: Record<string, unknown> = {
-          title: updated.title,
-          days: updated.days.map((d) => ({
-            dateStart: d.dateStart,
-            dateEnd: d.dateEnd,
-            name: d.name,
-            sortOrder: d.sortOrder,
-            items: d.items.map((item) => ({
-              name: item.name,
-              nameLocal: item.nameLocal,
-              latitude: item.latitude,
-              longitude: item.longitude,
-              notes: item.notes,
-              startTime: item.startTime,
-              endTime: item.endTime,
-              enrichment: item.enrichment,
-            })),
-          })),
-        };
-        if (updated.password?.trim()) {
-          body.password = updated.password.trim();
-        }
-
-        const res = await fetch(`/api/trips/${token}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            ...tripPasswordHeaders(token),
-          },
-          body: JSON.stringify(body),
-        });
-        if (res.status === 401) {
-          setLocked(true);
-          throw new Error("Password required");
-        }
-        if (!res.ok) throw new Error("Save failed");
-        if (updated.password?.trim()) {
-          storeTripPassword(token, updated.password.trim());
-        }
-        router.push(`/share/${token}`);
+        await saverRef.current?.flush();
+        await persistDraft(updated, { redirect: true });
       } catch {
         setError("Failed to save");
       } finally {
         setSaving(false);
       }
     },
-    [token, router]
+    [token, persistDraft]
   );
 
   if (loading) {
@@ -194,7 +248,13 @@ export default function EditTripPage({
             View map
           </Link>
         </div>
-        <TripEditor trip={trip} onSave={handleSave} isSaving={saving} />
+        <TripEditor
+          trip={trip}
+          onSave={handleSave}
+          onChange={handleChange}
+          isSaving={saving}
+          saveStatus={saveStatus}
+        />
       </div>
     </div>
   );

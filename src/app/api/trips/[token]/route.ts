@@ -6,7 +6,7 @@ import {
   stops,
   enrichments,
 } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { assertTripPassword } from "@/lib/trip-auth";
 import { hashPassword } from "@/lib/trip-password";
@@ -100,62 +100,72 @@ export async function PATCH(
       itineraryUpdates.passwordHash = await hashPassword(data.password);
     }
 
-    if (data.title || data.password?.trim()) {
-      await db
-        .update(itineraries)
-        .set(itineraryUpdates)
-        .where(eq(itineraries.id, itinerary.id));
-    }
-
     if (data.days !== undefined) {
-      const existingDays = await db
-        .select()
-        .from(days)
-        .where(eq(days.itineraryId, itinerary.id));
-
-      for (const day of existingDays) {
-        const dayStops = await db
-          .select()
-          .from(stops)
-          .where(eq(stops.dayId, day.id));
-        for (const stop of dayStops) {
-          await db.delete(enrichments).where(eq(enrichments.stopId, stop.id));
-        }
-        await db.delete(stops).where(eq(stops.dayId, day.id));
-        await db.delete(days).where(eq(days.id, day.id));
-      }
-
-      const legacyStops = await db
-        .select()
+      const existingStopRows = await db
+        .select({ id: stops.id })
         .from(stops)
         .where(eq(stops.itineraryId, itinerary.id));
-      for (const stop of legacyStops) {
-        if (stop.dayId === null) {
-          await db.delete(enrichments).where(eq(enrichments.stopId, stop.id));
-          await db.delete(stops).where(eq(stops.id, stop.id));
-        }
-      }
 
-      for (let dayIndex = 0; dayIndex < data.days.length; dayIndex++) {
-        const dayInput = data.days[dayIndex];
-        const [insertedDay] = await db
+      if (existingStopRows.length > 0) {
+        await db
+          .delete(enrichments)
+          .where(
+            inArray(
+              enrichments.stopId,
+              existingStopRows.map((s) => s.id)
+            )
+          );
+      }
+      await db.delete(stops).where(eq(stops.itineraryId, itinerary.id));
+      await db.delete(days).where(eq(days.itineraryId, itinerary.id));
+
+      if (data.days.length > 0) {
+        const insertedDays = await db
           .insert(days)
-          .values({
-            itineraryId: itinerary.id,
-            dateStart: dayInput.dateStart,
-            dateEnd: dayInput.dateEnd,
-            name: dayInput.name ?? null,
-            sortOrder: dayInput.sortOrder ?? dayIndex,
-          })
+          .values(
+            data.days.map((dayInput, dayIndex) => ({
+              itineraryId: itinerary.id,
+              dateStart: dayInput.dateStart,
+              dateEnd: dayInput.dateEnd,
+              name: dayInput.name ?? null,
+              sortOrder: dayInput.sortOrder ?? dayIndex,
+            }))
+          )
           .returning();
 
-        for (let itemIndex = 0; itemIndex < dayInput.items.length; itemIndex++) {
-          const item = dayInput.items[itemIndex];
-          const [insertedStop] = await db
-            .insert(stops)
-            .values({
+        const stopValues: {
+          itineraryId: string;
+          dayId: string;
+          name: string;
+          nameLocal: string | null;
+          latitude: string | null;
+          longitude: string | null;
+          notes: string | null;
+          startTime: string | null;
+          endTime: string | null;
+          sortOrder: number;
+        }[] = [];
+
+        const enrichmentSources: {
+          stopIndex: number;
+          enrichment: NonNullable<
+            (typeof data.days)[0]["items"][0]["enrichment"]
+          >;
+        }[] = [];
+
+        let stopIndex = 0;
+        for (let dayIndex = 0; dayIndex < data.days.length; dayIndex++) {
+          const dayInput = data.days[dayIndex];
+          const dayId = insertedDays[dayIndex].id;
+          for (
+            let itemIndex = 0;
+            itemIndex < dayInput.items.length;
+            itemIndex++
+          ) {
+            const item = dayInput.items[itemIndex];
+            stopValues.push({
               itineraryId: itinerary.id,
-              dayId: insertedDay.id,
+              dayId,
               name: item.name,
               nameLocal: item.nameLocal ?? null,
               latitude: item.latitude?.toString() ?? null,
@@ -164,20 +174,43 @@ export async function PATCH(
               startTime: item.startTime ?? null,
               endTime: item.endTime ?? null,
               sortOrder: itemIndex,
-            })
+            });
+            if (item.enrichment) {
+              enrichmentSources.push({
+                stopIndex,
+                enrichment: item.enrichment,
+              });
+            }
+            stopIndex += 1;
+          }
+        }
+
+        if (stopValues.length > 0) {
+          const insertedStops = await db
+            .insert(stops)
+            .values(stopValues)
             .returning();
 
-          if (item.enrichment) {
-            await db.insert(enrichments).values({
-              stopId: insertedStop.id,
-              wikipediaSummary: item.enrichment.wikipediaSummary ?? null,
-              wikipediaUrl: item.enrichment.wikipediaUrl ?? null,
-              imageUrl: item.enrichment.imageUrl ?? null,
-              imageAttribution: item.enrichment.imageAttribution ?? null,
-            });
+          if (enrichmentSources.length > 0) {
+            await db.insert(enrichments).values(
+              enrichmentSources.map(({ stopIndex: i, enrichment }) => ({
+                stopId: insertedStops[i].id,
+                wikipediaSummary: enrichment.wikipediaSummary ?? null,
+                wikipediaUrl: enrichment.wikipediaUrl ?? null,
+                imageUrl: enrichment.imageUrl ?? null,
+                imageAttribution: enrichment.imageAttribution ?? null,
+              }))
+            );
           }
         }
       }
+    }
+
+    if (data.title || data.password?.trim() || data.days !== undefined) {
+      await db
+        .update(itineraries)
+        .set(itineraryUpdates)
+        .where(eq(itineraries.id, itinerary.id));
     }
 
     const [updated] = await db
