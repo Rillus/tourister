@@ -129,7 +129,7 @@ export function TripMap({
 
   const handleAddToTrip = useCallback(
     (suggestion: ActivitySuggestion) => {
-      if (readOnly) return;
+      if (!allowPinEdit) return;
 
       const newStop: EnrichedStop = {
         name: suggestion.name,
@@ -150,7 +150,7 @@ export function TripMap({
       });
       setHasUnsavedChanges(true);
     },
-    [selectedIndex, filteredStops, readOnly]
+    [selectedIndex, filteredStops, allowPinEdit]
   );
 
   const handleUpdateNotes = useCallback((index: number, notes: string) => {
@@ -225,7 +225,7 @@ export function TripMap({
   );
 
   const handleAddActivity = useCallback(() => {
-    if (readOnly) return;
+    if (!allowPinEdit) return;
 
     const anchor = selectedIndex !== null ? filteredStops[selectedIndex] : stops[0];
     const dateStart = anchor?.dateStart ?? new Date().toISOString().slice(0, 10);
@@ -250,7 +250,7 @@ export function TripMap({
       return updated;
     });
     setHasUnsavedChanges(true);
-  }, [selectedIndex, filteredStops, stops, readOnly]);
+  }, [selectedIndex, filteredStops, stops, allowPinEdit]);
 
   const handleSave = useCallback(async () => {
     if (!shareToken || !allowPinEdit) return;
@@ -606,12 +606,12 @@ export function TripMap({
                       }}
                       editable={allowPinEdit}
                       onTitleChange={
-                        !readOnly
+                        allowPinEdit
                           ? (name) => handleUpdateTitle(index, name)
                           : undefined
                       }
                       onNotesChange={
-                        !readOnly
+                        allowPinEdit
                           ? (notes) => handleUpdateNotes(index, notes)
                           : undefined
                       }
@@ -621,7 +621,7 @@ export function TripMap({
                           : undefined
                       }
                       onFetchEnrichment={
-                        !readOnly
+                        allowPinEdit
                           ? () => void handleFetchEnrichment(index)
                           : undefined
                       }
@@ -630,7 +630,7 @@ export function TripMap({
                 {/* Show suggestions panel and add activity under the selected stop */}
                 {selectedIndex === index &&
                   selectedStop &&
-                  !readOnly &&
+                  allowPinEdit &&
                   hasValidCoordinates(selectedStop) && (
                   <div className="mt-2 ml-2 rounded-lg border border-foreground/8 bg-foreground/[0.01] overflow-hidden">
                     <div className="p-2 border-b border-foreground/8">
@@ -653,7 +653,7 @@ export function TripMap({
                 </div>
               );
             })}
-            {!readOnly && (
+            {allowPinEdit && (
               <div className="pt-2">
                 <button
                   type="button"
