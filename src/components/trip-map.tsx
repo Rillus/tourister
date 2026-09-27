@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { StopCard } from "./stop-card";
 import { SuggestionPanel } from "./suggestion-panel";
+import { MapPicker } from "./map-picker";
 import type { EnrichedStop } from "@/types/enrichment";
 import type { ActivitySuggestion } from "@/types/suggestions";
 import { stopsToDays } from "@/types/trip";
+import { hasValidCoordinates } from "@/lib/coordinates";
 
 /** Format YYYY-MM-DD as "1 Nov" */
 function formatShortDate(dateStr: string): string {
@@ -56,6 +58,7 @@ export function TripMap({
   const [copyFeedback, setCopyFeedback] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [pickingPinIndex, setPickingPinIndex] = useState<number | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const suggestionMarkersRef = useRef<mapboxgl.Marker[]>([]);
   const stopCardRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -69,12 +72,20 @@ export function TripMap({
   }, [shareUrl]);
 
   const days = getDaysFromStops(stops);
-  const filteredStops =
-    activeDay === "all"
-      ? stops
-      : stops.filter((s) => s.dateStart === activeDay);
+  const filteredStops = useMemo(
+    () =>
+      activeDay === "all"
+        ? stops
+        : stops.filter((s) => s.dateStart === activeDay),
+    [stops, activeDay]
+  );
+  const mappedStops = useMemo(
+    () => filteredStops.filter(hasValidCoordinates),
+    [filteredStops]
+  );
 
   const flyTo = useCallback((stop: EnrichedStop, zoom = 13) => {
+    if (!hasValidCoordinates(stop)) return;
     map.current?.flyTo({
       center: [stop.longitude, stop.latitude],
       zoom,
@@ -203,7 +214,7 @@ export function TripMap({
   }, [selectedIndex]);
 
   useEffect(() => {
-    if (!mapContainer.current || filteredStops.length === 0) return;
+    if (!mapContainer.current) return;
 
     const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
     if (!token) {
@@ -213,11 +224,15 @@ export function TripMap({
 
     mapboxgl.accessToken = token;
 
+    const defaultCenter: [number, number] = mappedStops[0]
+      ? [mappedStops[0].longitude, mappedStops[0].latitude]
+      : [139.6503, 35.6762];
+
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: "mapbox://styles/mapbox/light-v11",
-      center: [filteredStops[0].longitude, filteredStops[0].latitude],
-      zoom: 5,
+      center: defaultCenter,
+      zoom: mappedStops.length > 0 ? 5 : 4,
     });
 
     map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
@@ -225,7 +240,8 @@ export function TripMap({
     map.current.on("load", () => {
       if (!map.current) return;
 
-      filteredStops.forEach((stop, index) => {
+      mappedStops.forEach((stop) => {
+        const index = filteredStops.indexOf(stop);
         const el = document.createElement("div");
         el.className = "stop-marker";
         el.innerHTML = `<span>${index + 1}</span>`;
@@ -242,8 +258,8 @@ export function TripMap({
         markersRef.current.push(marker);
       });
 
-      if (filteredStops.length > 1) {
-        const coordinates = filteredStops.map((s) => [s.longitude, s.latitude]);
+      if (mappedStops.length > 1) {
+        const coordinates = mappedStops.map((s) => [s.longitude, s.latitude]);
 
         map.current.addSource("route", {
           type: "geojson",
@@ -267,9 +283,11 @@ export function TripMap({
         });
       }
 
-      const bounds = new mapboxgl.LngLatBounds();
-      filteredStops.forEach((s) => bounds.extend([s.longitude, s.latitude]));
-      map.current.fitBounds(bounds, { padding: 60 });
+      if (mappedStops.length > 0) {
+        const bounds = new mapboxgl.LngLatBounds();
+        mappedStops.forEach((s) => bounds.extend([s.longitude, s.latitude]));
+        map.current.fitBounds(bounds, { padding: 60 });
+      }
     });
 
     return () => {
@@ -279,7 +297,7 @@ export function TripMap({
       suggestionMarkersRef.current = [];
       map.current?.remove();
     };
-  }, [filteredStops, flyTo]);
+  }, [filteredStops, mappedStops, flyTo]);
 
   // Add suggestion markers when a stop is selected and suggestions are loaded
   useEffect(() => {
@@ -454,9 +472,17 @@ export function TripMap({
                           ? (notes) => handleUpdateNotes(index, notes)
                           : undefined
                       }
+                      onDropPin={
+                        !readOnly && !hasValidCoordinates(stop)
+                          ? () => setPickingPinIndex(index)
+                          : undefined
+                      }
                     />
                 {/* Show suggestions panel and add activity under the selected stop */}
-                {selectedIndex === index && selectedStop && !readOnly && (
+                {selectedIndex === index &&
+                  selectedStop &&
+                  !readOnly &&
+                  hasValidCoordinates(selectedStop) && (
                   <div className="mt-2 ml-2 rounded-lg border border-foreground/8 bg-foreground/[0.01] overflow-hidden">
                     <div className="p-2 border-b border-foreground/8">
                       <button
@@ -504,6 +530,37 @@ export function TripMap({
         {/* Map */}
         <div ref={mapContainer} className="flex-1 min-w-0" />
       </div>
+
+      {pickingPinIndex !== null && filteredStops[pickingPinIndex] && (
+        <MapPicker
+          initialCenter={
+            mappedStops.length > 0
+              ? {
+                  lat: mappedStops[0].latitude,
+                  lon: mappedStops[0].longitude,
+                }
+              : undefined
+          }
+          onSelect={(lat, lon) => {
+            const filtered = filteredStops[pickingPinIndex];
+            setStops((prev) => {
+              const fullIndex = prev.findIndex((s) => s === filtered);
+              if (fullIndex < 0) return prev;
+              const updated = [...prev];
+              updated[fullIndex] = {
+                ...updated[fullIndex],
+                latitude: lat,
+                longitude: lon,
+              };
+              return updated;
+            });
+            setHasUnsavedChanges(true);
+            setPickingPinIndex(null);
+            setSelectedIndex(pickingPinIndex);
+          }}
+          onCancel={() => setPickingPinIndex(null)}
+        />
+      )}
     </div>
   );
 }

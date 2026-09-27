@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { EnrichedStop } from "@/types/enrichment";
+import { hasValidCoordinates } from "@/lib/coordinates";
 
 interface StopCardProps {
   stop: EnrichedStop;
@@ -10,6 +11,7 @@ interface StopCardProps {
   onSelect: () => void;
   editable?: boolean;
   onNotesChange?: (notes: string) => void;
+  onDropPin?: () => void;
 }
 
 export function StopCard({
@@ -19,10 +21,12 @@ export function StopCard({
   onSelect,
   editable,
   onNotesChange,
+  onDropPin,
 }: StopCardProps) {
   const [imageError, setImageError] = useState(false);
   const enrichment = stop.enrichment;
   const hasImage = enrichment?.imageUrl && !imageError;
+  const mapped = hasValidCoordinates(stop);
 
   return (
     <div
@@ -106,6 +110,28 @@ export function StopCard({
               {stop.notes}
             </p>
           )
+        )}
+
+        {!mapped && (
+          <div
+            className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-2"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <p className="text-xs text-amber-800 dark:text-amber-200">
+              No location found — this stop won&apos;t appear on the map until
+              you place it.
+            </p>
+            {onDropPin && (
+              <button
+                type="button"
+                onClick={onDropPin}
+                className="mt-1.5 rounded-md bg-amber-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-amber-700"
+              >
+                Drop pin
+              </button>
+            )}
+          </div>
         )}
 
         {/* Wikipedia link */}

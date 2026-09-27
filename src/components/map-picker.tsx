@@ -26,7 +26,11 @@ export function MapPicker({
   const marker = useRef<mapboxgl.Marker | null>(null);
 
   const [picked, setPicked] = useState<{ lat: number; lon: number } | null>(
-    latitude != null && longitude != null ? { lat: latitude, lon: longitude } : null
+    latitude != null &&
+      longitude != null &&
+      !(latitude === 0 && longitude === 0)
+      ? { lat: latitude, lon: longitude }
+      : null
   );
 
   useEffect(() => {

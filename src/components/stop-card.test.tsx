@@ -179,4 +179,36 @@ describe("StopCard", () => {
     fireEvent.change(textarea, { target: { value: "Updated notes" } });
     expect(onNotesChange).toHaveBeenCalledWith("Updated notes");
   });
+
+  it("shows no location message and Drop pin when coordinates are missing", () => {
+    const onDropPin = vi.fn();
+    render(
+      <StopCard
+        stop={{ name: "Mystery place", latitude: 0, longitude: 0 }}
+        index={0}
+        isSelected
+        onSelect={vi.fn()}
+        editable
+        onDropPin={onDropPin}
+      />
+    );
+
+    expect(screen.getByText(/No location found/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Drop pin"));
+    expect(onDropPin).toHaveBeenCalled();
+  });
+
+  it("does not show Drop pin when location is valid", () => {
+    render(
+      <StopCard
+        stop={bareStop}
+        index={0}
+        isSelected
+        onSelect={vi.fn()}
+        editable
+        onDropPin={vi.fn()}
+      />
+    );
+    expect(screen.queryByText(/No location found/i)).not.toBeInTheDocument();
+  });
 });
