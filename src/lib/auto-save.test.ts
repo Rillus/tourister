@@ -14,13 +14,17 @@ describe("createTripSaver", () => {
   });
 
   it("runs again if marked pending while a save is in flight", async () => {
-    let resolveSave!: () => void;
-    const save = vi.fn().mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveSave = resolve;
-        })
-    );
+    let resolveFirst!: () => void;
+    const save = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveFirst = resolve;
+          })
+      )
+      .mockResolvedValueOnce(undefined);
+
     const saver = createTripSaver(save);
 
     saver.markPending();
@@ -28,12 +32,10 @@ describe("createTripSaver", () => {
     expect(save).toHaveBeenCalledTimes(1);
 
     saver.markPending();
-    resolveSave();
+    resolveFirst();
     await first;
 
-    await vi.waitFor(() => {
-      expect(save).toHaveBeenCalledTimes(2);
-    });
+    expect(save).toHaveBeenCalledTimes(2);
   });
 
   it("reports pending → saving → saved status", async () => {
