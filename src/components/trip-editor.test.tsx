@@ -27,7 +27,8 @@ vi.mock("./map-picker", () => ({
     </div>
   ),
 }));
-import type { Trip, TripDay } from "@/types/trip";
+
+import type { Trip } from "@/types/trip";
 
 const sampleTrip: Trip = {
   id: "1",
@@ -37,7 +38,7 @@ const sampleTrip: Trip = {
     {
       id: "d1",
       dateStart: "2026-11-01",
-      dateEnd: "2026-11-03",
+      dateEnd: "2026-11-01",
       name: "Tokyo",
       sortOrder: 0,
       items: [
@@ -46,6 +47,7 @@ const sampleTrip: Trip = {
           latitude: 35.66,
           longitude: 139.7,
           notes: "Explore",
+          startTime: "10:00",
         },
       ],
     },
@@ -61,13 +63,14 @@ describe("TripEditor", () => {
     expect(screen.getByDisplayValue("Japan 2026")).toBeInTheDocument();
   });
 
-  it("renders day with date and items", () => {
+  it("shows calendar and selected day plotter", () => {
     const onSave = vi.fn();
     render(<TripEditor trip={sampleTrip} onSave={onSave} isSaving={false} />);
 
+    expect(screen.getByLabelText("Trip calendar")).toBeInTheDocument();
+    expect(screen.getByText(/1 Nov 2026/i)).toBeInTheDocument();
     expect(screen.getByDisplayValue("Tokyo")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Shibuya")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("Explore")).toBeInTheDocument();
+    expect(screen.getByText("Shibuya")).toBeInTheDocument();
   });
 
   it("calls onSave when Save is clicked", () => {
@@ -85,22 +88,35 @@ describe("TripEditor", () => {
     expect(onSave.mock.calls[0][0].days[0].items[0].name).toBe("Shibuya");
   });
 
-  it("adds a new day when Add day is clicked", () => {
+  it("creates a day when selecting an empty calendar date", () => {
     const onSave = vi.fn();
     render(<TripEditor trip={sampleTrip} onSave={onSave} isSaving={false} />);
 
-    fireEvent.click(screen.getByText("+ Add day"));
-
-    expect(screen.getAllByPlaceholderText(/Day name/)).toHaveLength(2);
+    fireEvent.click(screen.getByLabelText("2026-11-02"));
+    expect(screen.getByText(/2 Nov 2026/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/No activities — add one to start plotting this day/i)
+    ).toBeInTheDocument();
   });
 
-  it("adds a new activity when Add activity is clicked", () => {
+  it("adds an activity via the day plotter", () => {
     const onSave = vi.fn();
     render(<TripEditor trip={sampleTrip} onSave={onSave} isSaving={false} />);
 
     fireEvent.click(screen.getByText("+ Add activity"));
+    fireEvent.change(screen.getByLabelText("Activity name"), {
+      target: { value: "Harajuku" },
+    });
+    fireEvent.change(screen.getByLabelText("Start time"), {
+      target: { value: "14:00" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
-    expect(screen.getAllByPlaceholderText("Activity name")).toHaveLength(2);
+    fireEvent.click(screen.getByText("Save changes"));
+    const saved = onSave.mock.calls[0][0].days[0].items;
+    expect(saved.some((i: { name: string }) => i.name === "Harajuku")).toBe(
+      true
+    );
   });
 
   it("disables save button when saving", () => {
@@ -110,22 +126,17 @@ describe("TripEditor", () => {
     expect(screen.getByText("Saving…")).toBeDisabled();
   });
 
-  it("opens map picker when Set location is clicked and updates item on confirm", async () => {
+  it("opens map picker when Set location is clicked and updates item on confirm", () => {
     const onSave = vi.fn();
     render(<TripEditor trip={sampleTrip} onSave={onSave} isSaving={false} />);
 
-    const pinButton = screen.getByLabelText("Set location on map");
-    fireEvent.click(pinButton);
-
+    fireEvent.click(screen.getByLabelText("Set location for Shibuya"));
     expect(screen.getByTestId("map-picker")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Confirm location"));
-
     expect(screen.queryByTestId("map-picker")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Save changes"));
-
-    expect(onSave).toHaveBeenCalled();
     const savedItems = onSave.mock.calls[0][0].days[0].items;
     expect(savedItems[0]).toMatchObject({ latitude: 35.5, longitude: 139.7 });
   });

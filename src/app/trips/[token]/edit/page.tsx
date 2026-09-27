@@ -69,6 +69,8 @@ export default function EditTripPage({
                 latitude: item.latitude,
                 longitude: item.longitude,
                 notes: item.notes,
+                startTime: item.startTime,
+                endTime: item.endTime,
                 enrichment: item.enrichment,
               })),
             })),
@@ -106,7 +108,7 @@ export default function EditTripPage({
 
   return (
     <div className="min-h-screen p-4 sm:p-6">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <div className="flex items-center gap-3 mb-6">
           <Link
             href="/trips"

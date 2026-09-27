@@ -28,7 +28,7 @@ const cachedRow = {
   imageAttribution: sampleEnrichment.imageAttribution,
   openingHours: null,
   admissionFee: null,
-  cachedAt: new Date("2026-03-01"),
+  cachedAt: new Date(),
 };
 
 beforeEach(() => {

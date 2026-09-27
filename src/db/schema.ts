@@ -53,6 +53,8 @@ export const stops = pgTable("stops", {
   longitude: decimal("longitude", { precision: 10, scale: 7 }),
   dateStart: date("date_start"),
   dateEnd: date("date_end"),
+  startTime: text("start_time"),
+  endTime: text("end_time"),
   notes: text("notes"),
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),

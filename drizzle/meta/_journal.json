@@ -15,6 +15,13 @@
       "when": 1772871501778,
       "tag": "0001_clumsy_starjammers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790495714882,
+      "tag": "0002_stops_start_end_time",
+      "breakpoints": true
     }
   ]
 }

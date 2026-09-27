@@ -23,6 +23,8 @@ const ItemSchema = z.object({
   latitude: z.number().optional(),
   longitude: z.number().optional(),
   notes: z.string().optional(),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
   enrichment: EnrichmentSchema.optional(),
 });
 
@@ -134,6 +136,8 @@ export async function PATCH(
               latitude: item.latitude?.toString() ?? null,
               longitude: item.longitude?.toString() ?? null,
               notes: item.notes ?? null,
+              startTime: item.startTime ?? null,
+              endTime: item.endTime ?? null,
               sortOrder: itemIndex,
             })
             .returning();

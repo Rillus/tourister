@@ -29,11 +29,29 @@ export interface Trip {
   stops: EnrichedStop[];
 }
 
+/** Compare HH:mm times; missing times sort after timed ones */
+export function compareStartTimes(
+  a: string | undefined,
+  b: string | undefined
+): number {
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+  return a.localeCompare(b);
+}
+
+/** Sort items by startTime then leave relative order for ties / untimed */
+export function sortItemsByTime<T extends { startTime?: string }>(
+  items: T[]
+): T[] {
+  return [...items].sort((a, b) => compareStartTimes(a.startTime, b.startTime));
+}
+
 /** Flatten trip days into stops for map/legacy consumers */
 export function tripToStops(trip: Trip): EnrichedStop[] {
   if (trip.stops.length > 0) return trip.stops;
   return trip.days.flatMap((day) =>
-    day.items.map((item) => ({
+    sortItemsByTime(day.items).map((item) => ({
       ...item,
       dateStart: day.dateStart,
       dateEnd: day.dateEnd,
@@ -56,7 +74,7 @@ export function stopsToDays(stopList: EnrichedStop[]): TripDay[] {
     return a.localeCompare(b);
   });
   return sortedDates.map((date, i) => {
-    const items = byDate.get(date)!;
+    const items = sortItemsByTime(byDate.get(date)!);
     const dateEnd = items[0]?.dateEnd ?? items[0]?.dateStart ?? date;
     return {
       id: `day-${i}`,
@@ -66,4 +84,17 @@ export function stopsToDays(stopList: EnrichedStop[]): TripDay[] {
       items: items.map((s) => ({ ...s } as TripItem)),
     };
   });
+}
+
+/** Earliest and latest YYYY-MM-DD across days (ignores empty) */
+export function tripDateRange(days: TripDay[]): {
+  start: string | null;
+  end: string | null;
+} {
+  const dates = days
+    .flatMap((d) => [d.dateStart, d.dateEnd])
+    .filter((d) => !!d)
+    .sort();
+  if (dates.length === 0) return { start: null, end: null };
+  return { start: dates[0], end: dates[dates.length - 1] };
 }

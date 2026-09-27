@@ -165,6 +165,8 @@ export function TripMap({
               latitude: item.latitude,
               longitude: item.longitude,
               notes: item.notes,
+              startTime: item.startTime,
+              endTime: item.endTime,
               enrichment: item.enrichment,
             })),
           })),

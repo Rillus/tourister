@@ -60,6 +60,8 @@ export async function GET(
         longitude: lon,
         dateStart: stop.dateStart ?? undefined,
         dateEnd: stop.dateEnd ?? undefined,
+        startTime: stop.startTime ?? undefined,
+        endTime: stop.endTime ?? undefined,
         notes: stop.notes ?? undefined,
         enrichment: enrichment
           ? {
@@ -114,6 +116,8 @@ export async function GET(
             latitude: stop.latitude ? parseFloat(stop.latitude) : 0,
             longitude: stop.longitude ? parseFloat(stop.longitude) : 0,
             notes: stop.notes ?? undefined,
+            startTime: stop.startTime ?? undefined,
+            endTime: stop.endTime ?? undefined,
             enrichment: e
               ? {
                   wikipediaSummary: e.wikipediaSummary ?? "",

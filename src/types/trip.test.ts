@@ -1,6 +1,70 @@
 import { describe, it, expect } from "vitest";
-import { tripToStops, stopsToDays } from "./trip";
+import {
+  tripToStops,
+  stopsToDays,
+  sortItemsByTime,
+  compareStartTimes,
+  tripDateRange,
+} from "./trip";
 import type { Trip, TripDay } from "./trip";
+
+describe("compareStartTimes", () => {
+  it("orders earlier times first", () => {
+    expect(compareStartTimes("09:00", "14:00")).toBeLessThan(0);
+    expect(compareStartTimes("14:00", "09:00")).toBeGreaterThan(0);
+  });
+
+  it("puts untimed after timed", () => {
+    expect(compareStartTimes(undefined, "10:00")).toBeGreaterThan(0);
+    expect(compareStartTimes("10:00", undefined)).toBeLessThan(0);
+  });
+});
+
+describe("sortItemsByTime", () => {
+  it("sorts by startTime with untimed last", () => {
+    const items = [
+      { name: "C", startTime: "15:00" },
+      { name: "A", startTime: "09:00" },
+      { name: "B" },
+      { name: "D", startTime: "12:00" },
+    ];
+    expect(sortItemsByTime(items).map((i) => i.name)).toEqual([
+      "A",
+      "D",
+      "C",
+      "B",
+    ]);
+  });
+});
+
+describe("tripDateRange", () => {
+  it("returns nulls for empty days", () => {
+    expect(tripDateRange([])).toEqual({ start: null, end: null });
+  });
+
+  it("returns earliest start and latest end", () => {
+    const days: TripDay[] = [
+      {
+        id: "1",
+        dateStart: "2026-11-16",
+        dateEnd: "2026-11-16",
+        sortOrder: 0,
+        items: [],
+      },
+      {
+        id: "2",
+        dateStart: "2026-11-13",
+        dateEnd: "2026-11-15",
+        sortOrder: 1,
+        items: [],
+      },
+    ];
+    expect(tripDateRange(days)).toEqual({
+      start: "2026-11-13",
+      end: "2026-11-16",
+    });
+  });
+});
 
 describe("tripToStops", () => {
   it("returns flat stops when trip has stops", () => {
@@ -94,6 +158,35 @@ describe("tripToStops", () => {
     expect(stops).toHaveLength(1);
     expect(stops[0].name).toBe("Legacy");
   });
+
+  it("preserves startTime when flattening days", () => {
+    const trip: Trip = {
+      id: "1",
+      title: "Test",
+      shareToken: "abc",
+      days: [
+        {
+          id: "d1",
+          dateStart: "2026-11-14",
+          dateEnd: "2026-11-14",
+          sortOrder: 0,
+          items: [
+            {
+              name: "teamLab",
+              latitude: 0,
+              longitude: 0,
+              startTime: "10:00",
+              endTime: "12:00",
+            },
+          ],
+        },
+      ],
+      stops: [],
+    };
+    const stops = tripToStops(trip);
+    expect(stops[0].startTime).toBe("10:00");
+    expect(stops[0].endTime).toBe("12:00");
+  });
 });
 
 describe("stopsToDays", () => {
@@ -116,12 +209,31 @@ describe("stopsToDays", () => {
   });
 
   it("handles undated stops", () => {
-    const stops = [
-      { name: "X", latitude: 0, longitude: 0 },
-    ];
+    const stops = [{ name: "X", latitude: 0, longitude: 0 }];
     const result = stopsToDays(stops);
     expect(result).toHaveLength(1);
     expect(result[0].dateStart).toBe("");
     expect(result[0].items[0].name).toBe("X");
+  });
+
+  it("sorts items by startTime within a day", () => {
+    const stops = [
+      {
+        name: "Dinner",
+        latitude: 0,
+        longitude: 0,
+        dateStart: "2026-11-13",
+        startTime: "19:00",
+      },
+      {
+        name: "Lunch",
+        latitude: 0,
+        longitude: 0,
+        dateStart: "2026-11-13",
+        startTime: "12:00",
+      },
+    ];
+    const result = stopsToDays(stops);
+    expect(result[0].items.map((i) => i.name)).toEqual(["Lunch", "Dinner"]);
   });
 });

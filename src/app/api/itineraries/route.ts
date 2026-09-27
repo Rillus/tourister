@@ -23,6 +23,8 @@ const CreateItinerarySchema = z.object({
         dateStart: z.string().optional(),
         dateEnd: z.string().optional(),
         notes: z.string().optional(),
+        startTime: z.string().optional(),
+        endTime: z.string().optional(),
         enrichment: EnrichmentSchema.optional(),
       })
     )
@@ -53,6 +55,8 @@ export async function POST(request: NextRequest) {
       dateStart: stop.dateStart,
       dateEnd: stop.dateEnd,
       notes: stop.notes,
+      startTime: stop.startTime,
+      endTime: stop.endTime,
       sortOrder: index,
     }));
 
