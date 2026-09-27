@@ -15,12 +15,14 @@ interface TripEditorProps {
     days: TripDay[];
     password?: string;
   }) => void;
-  /** Fired on every draft change for debounced auto-save */
+  /** Fired on every draft change (marks unsaved; does not persist) */
   onChange?: (updated: {
     title: string;
     days: TripDay[];
     password?: string;
   }) => void;
+  /** Persist after a field blur or discrete action */
+  onBlurSave?: () => void;
   isSaving: boolean;
   saveStatus?: SaveStatus;
 }
@@ -44,6 +46,7 @@ export function TripEditor({
   trip,
   onSave,
   onChange,
+  onBlurSave,
   isSaving,
   saveStatus,
 }: TripEditorProps) {
@@ -187,6 +190,7 @@ export function TripEditor({
             setTitle(next);
             emitChange({ title: next, days, password });
           }}
+          onBlur={() => onBlurSave?.()}
           className="w-full rounded-lg border border-foreground/15 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40"
         />
       </div>
@@ -208,6 +212,7 @@ export function TripEditor({
             setPassword(next);
             emitChange({ title, days, password: next });
           }}
+          onBlur={() => onBlurSave?.()}
           placeholder="Leave blank to keep the current password"
           className="w-full rounded-lg border border-foreground/15 px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/40 placeholder:text-foreground/30"
         />
@@ -248,27 +253,31 @@ export function TripEditor({
       <div className="flex gap-3 items-center">
         <button
           type="submit"
-          disabled={isSaving}
+          disabled={isSaving || saveStatus === "saving"}
           className="flex-1 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isSaving ? "Saving…" : "Done"}
+          {isSaving || saveStatus === "saving" ? "Saving…" : "Save & view map"}
         </button>
-        {saveStatus && saveStatus !== "idle" && (
-          <span
-            className={`text-xs shrink-0 ${
-              saveStatus === "error"
-                ? "text-red-600"
-                : saveStatus === "saved"
-                  ? "text-foreground/40"
-                  : "text-amber-700"
-            }`}
-            aria-live="polite"
+        {saveStatus === "pending" && (
+          <button
+            type="button"
+            onClick={() => onBlurSave?.()}
+            className="rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-medium text-white hover:bg-amber-600 cursor-pointer"
           >
-            {saveStatus === "pending" && "Unsaved…"}
-            {saveStatus === "saving" && "Saving…"}
-            {saveStatus === "saved" && "Saved"}
-            {saveStatus === "error" && "Save failed"}
-          </span>
+            Save
+          </button>
+        )}
+        {saveStatus === "saved" && (
+          <span className="text-xs text-foreground/40 shrink-0">Saved</span>
+        )}
+        {saveStatus === "error" && (
+          <button
+            type="button"
+            onClick={() => onBlurSave?.()}
+            className="text-xs text-red-600 underline cursor-pointer"
+          >
+            Retry save
+          </button>
         )}
         <Link
           href="/trips"
@@ -309,6 +318,7 @@ export function TripEditor({
               return next;
             });
             setPickingFor(null);
+            onBlurSave?.();
           }}
           onCancel={() => setPickingFor(null)}
         />

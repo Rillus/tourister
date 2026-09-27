@@ -11,10 +11,7 @@ import {
   storeTripPassword,
   tripPasswordHeaders,
 } from "@/lib/trip-auth-client";
-import {
-  createDebouncedSaver,
-  type SaveStatus,
-} from "@/lib/auto-save";
+import { createTripSaver, type SaveStatus } from "@/lib/auto-save";
 
 type TripDraft = {
   title: string;
@@ -38,7 +35,7 @@ export default function EditTripPage({
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const draftRef = useRef<TripDraft | null>(null);
-  const saverRef = useRef<ReturnType<typeof createDebouncedSaver> | null>(null);
+  const saverRef = useRef<ReturnType<typeof createTripSaver> | null>(null);
 
   useEffect(() => {
     params.then((p) => setToken(p.token));
@@ -95,29 +92,15 @@ export default function EditTripPage({
 
   useEffect(() => {
     if (!token) return;
-    saverRef.current = createDebouncedSaver(
-      async () => {
-        const draft = draftRef.current;
-        if (!draft) return;
-        await persistDraft(draft, { redirect: false });
-      },
-      800,
-      setSaveStatus
-    );
-    const flush = () => {
-      void saverRef.current?.flush();
-    };
-    const onVisibility = () => {
-      if (document.visibilityState === "hidden") flush();
-    };
-    window.addEventListener("pagehide", flush);
-    document.addEventListener("visibilitychange", onVisibility);
+    saverRef.current = createTripSaver(async () => {
+      const draft = draftRef.current;
+      if (!draft) return;
+      await persistDraft(draft, { redirect: false });
+    }, setSaveStatus);
+
     return () => {
-      flush();
       saverRef.current?.cancel();
       saverRef.current = null;
-      window.removeEventListener("pagehide", flush);
-      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [token, persistDraft]);
 
@@ -182,7 +165,11 @@ export default function EditTripPage({
 
   const handleChange = useCallback((updated: TripDraft) => {
     draftRef.current = updated;
-    saverRef.current?.schedule();
+    saverRef.current?.markPending();
+  }, []);
+
+  const handleBlurSave = useCallback(() => {
+    void saverRef.current?.save().catch(() => {});
   }, []);
 
   const handleSave = useCallback(
@@ -190,8 +177,9 @@ export default function EditTripPage({
       if (!token) return;
       setSaving(true);
       draftRef.current = updated;
+      saverRef.current?.markPending();
       try {
-        await saverRef.current?.flush();
+        await saverRef.current?.save();
         await persistDraft(updated, { redirect: true });
       } catch {
         setError("Failed to save");
@@ -252,6 +240,7 @@ export default function EditTripPage({
           trip={trip}
           onSave={handleSave}
           onChange={handleChange}
+          onBlurSave={handleBlurSave}
           isSaving={saving}
           saveStatus={saveStatus}
         />

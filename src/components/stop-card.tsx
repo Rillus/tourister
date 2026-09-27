@@ -11,7 +11,9 @@ interface StopCardProps {
   onSelect: () => void;
   editable?: boolean;
   onNotesChange?: (notes: string) => void;
+  onNotesBlur?: () => void;
   onTitleChange?: (title: string) => void;
+  onTitleBlur?: () => void;
   onDropPin?: () => void;
   onFetchEnrichment?: () => void;
   isEnriching?: boolean;
@@ -24,7 +26,9 @@ export function StopCard({
   onSelect,
   editable,
   onNotesChange,
+  onNotesBlur,
   onTitleChange,
+  onTitleBlur,
   onDropPin,
   onFetchEnrichment,
   isEnriching,
@@ -85,6 +89,7 @@ export function StopCard({
                 aria-label="Stop title"
                 value={stop.name}
                 onChange={(e) => onTitleChange(e.target.value)}
+                onBlur={() => onTitleBlur?.()}
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
                 className="w-full rounded border border-foreground/15 bg-background px-2 py-1 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500/40"
@@ -116,6 +121,7 @@ export function StopCard({
           <textarea
             value={stop.notes ?? ""}
             onChange={(e) => onNotesChange(e.target.value)}
+            onBlur={() => onNotesBlur?.()}
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
             placeholder="Add notes…"

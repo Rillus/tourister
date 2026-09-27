@@ -199,6 +199,24 @@ describe("StopCard", () => {
     expect(onTitleChange).toHaveBeenCalledWith("Kyoto Station");
   });
 
+  it("saves title on blur", () => {
+    const onTitleBlur = vi.fn();
+    render(
+      <StopCard
+        stop={bareStop}
+        index={0}
+        isSelected
+        onSelect={vi.fn()}
+        editable
+        onTitleChange={vi.fn()}
+        onTitleBlur={onTitleBlur}
+      />
+    );
+
+    fireEvent.blur(screen.getByLabelText("Stop title"));
+    expect(onTitleBlur).toHaveBeenCalled();
+  });
+
   it("offers Get details when enrichment is missing", () => {
     const onFetchEnrichment = vi.fn();
     render(

@@ -3,15 +3,13 @@ export type SaveStatus = "idle" | "pending" | "saving" | "saved" | "error";
 type SaveFn = () => Promise<void>;
 
 /**
- * Debounced save queue: coalesces rapid edits, never overlaps requests,
- * and always runs one more pass if edits arrived while saving.
+ * Explicit save queue: mark dirty while editing, save on blur / button.
+ * Never overlaps requests; re-runs once if edits arrived mid-save.
  */
-export function createDebouncedSaver(
+export function createTripSaver(
   save: SaveFn,
-  delayMs = 800,
   onStatus?: (status: SaveStatus) => void
 ) {
-  let timer: ReturnType<typeof setTimeout> | null = null;
   let inFlight = false;
   let dirty = false;
 
@@ -28,6 +26,7 @@ export function createDebouncedSaver(
       if (!dirty) onStatus?.("saved");
     } catch {
       onStatus?.("error");
+      throw new Error("Save failed");
     } finally {
       inFlight = false;
       if (dirty) {
@@ -38,29 +37,17 @@ export function createDebouncedSaver(
   };
 
   return {
-    schedule() {
+    /** Local edits waiting to be saved */
+    markPending() {
       dirty = true;
       onStatus?.("pending");
-      if (inFlight) return;
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        timer = null;
-        void run();
-      }, delayMs);
     },
-    async flush() {
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
-      dirty = true;
+    /** Save now (blur or Save button). No-op if nothing pending. */
+    async save() {
+      if (!dirty && !inFlight) return;
       await run();
     },
     cancel() {
-      if (timer) {
-        clearTimeout(timer);
-        timer = null;
-      }
       dirty = false;
     },
   };
