@@ -38,6 +38,20 @@ describe("MapPicker", () => {
     process.env.NEXT_PUBLIC_MAPBOX_TOKEN = "test-token";
   });
 
+  it("prefills the search bar with the place title", () => {
+    render(
+      <MapPicker
+        onSelect={vi.fn()}
+        onCancel={vi.fn()}
+        initialCenter={{ lat: 35.66, lon: 139.7 }}
+        initialQuery="Fushimi Inari"
+      />
+    );
+    expect(screen.getByLabelText(/search for a place/i)).toHaveValue(
+      "Fushimi Inari"
+    );
+  });
+
   it("renders a location search field", () => {
     render(
       <MapPicker

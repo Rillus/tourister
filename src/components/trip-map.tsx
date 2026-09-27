@@ -625,6 +625,7 @@ export function TripMap({
               : undefined)
           }
           initialZoom={mapView?.zoom}
+          initialQuery={filteredStops[pickingPinIndex].name}
           latitude={
             hasValidCoordinates(filteredStops[pickingPinIndex])
               ? filteredStops[pickingPinIndex].latitude

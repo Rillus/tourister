@@ -214,6 +214,7 @@ export function TripEditor({ trip, onSave, isSaving }: TripEditorProps) {
       {mapPickerContext && (
         <MapPicker
           initialCenter={mapPickerContext.initialCenter}
+          initialQuery={mapPickerContext.item.name}
           latitude={
             mapPickerContext.item.latitude !== 0 ||
             mapPickerContext.item.longitude !== 0

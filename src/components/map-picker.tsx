@@ -15,6 +15,8 @@ interface MapPickerProps {
   initialCenter?: { lat: number; lon: number };
   /** Camera zoom when the picker opens */
   initialZoom?: number;
+  /** Prefill the search box (usually the stop/activity title) */
+  initialQuery?: string;
   /** Existing coordinates to show a marker (does not move the camera) */
   latitude?: number;
   longitude?: number;
@@ -31,6 +33,7 @@ function hasCoords(lat?: number, lon?: number): boolean {
 export function MapPicker({
   initialCenter = { lat: 35.6762, lon: 139.6503 },
   initialZoom = 12,
+  initialQuery = "",
   latitude,
   longitude,
   onSelect,
@@ -45,7 +48,7 @@ export function MapPicker({
       ? { lat: latitude!, lon: longitude! }
       : null
   );
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<PlaceResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
