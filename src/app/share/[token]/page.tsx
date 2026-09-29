@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { TripMap } from "@/components/trip-map";
 import { TripPasswordGate } from "@/components/trip-password-gate";
 import { addSavedTripToken } from "@/lib/saved-trips";
@@ -10,13 +11,13 @@ import {
   tripPasswordHeaders,
 } from "@/lib/trip-auth-client";
 import type { EnrichedStop } from "@/types/enrichment";
+import type { TripViewMode } from "@/components/trip-view-toggle";
 
-export default function SharePage({
-  params,
-}: {
-  params: Promise<{ token: string }>;
-}) {
-  const [token, setToken] = useState<string | null>(null);
+function ShareTripView({ token }: { token: string }) {
+  const searchParams = useSearchParams();
+  const initialView: TripViewMode =
+    searchParams.get("view") === "plotter" ? "plotter" : "map";
+
   const [title, setTitle] = useState<string>("");
   const [stops, setStops] = useState<EnrichedStop[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,13 +26,8 @@ export default function SharePage({
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    params.then((p) => setToken(p.token));
-  }, [params]);
-
   const loadTrip = useCallback(
     async (password?: string) => {
-      if (!token) return;
       const isUnlockAttempt = password !== undefined;
       if (isUnlockAttempt) {
         setCheckingPassword(true);
@@ -76,9 +72,8 @@ export default function SharePage({
   );
 
   useEffect(() => {
-    if (!token) return;
     void loadTrip();
-  }, [token, loadTrip]);
+  }, [loadTrip]);
 
   if (loading) {
     return (
@@ -119,10 +114,43 @@ export default function SharePage({
       <TripMap
         stops={stops}
         onBack={() => (window.location.href = "/")}
-        shareToken={token ?? undefined}
+        shareToken={token}
         title={title}
         readOnly
+        initialView={initialView}
       />
     </div>
+  );
+}
+
+export default function SharePage({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
+  const [token, setToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    params.then((p) => setToken(p.token));
+  }, [params]);
+
+  if (!token) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-foreground/60 animate-pulse">Loading…</p>
+      </div>
+    );
+  }
+
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <p className="text-foreground/60 animate-pulse">Loading…</p>
+        </div>
+      }
+    >
+      <ShareTripView token={token} />
+    </Suspense>
   );
 }

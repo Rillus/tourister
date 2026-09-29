@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import Link from "next/link";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { StopCard } from "./stop-card";
@@ -10,9 +9,12 @@ import { MapPicker } from "./map-picker";
 import { TripCalendar } from "./trip-calendar";
 import { TripSummaryCard } from "./trip-summary-card";
 import { CollapsibleSection } from "./collapsible-section";
+import { DayPlotter } from "./day-plotter";
+import { TripViewToggle, type TripViewMode } from "./trip-view-toggle";
 import type { EnrichedStop } from "@/types/enrichment";
 import type { ActivitySuggestion } from "@/types/suggestions";
-import { stopsToDays } from "@/types/trip";
+import type { TripItem } from "@/types/trip";
+import { replaceDayItems, stopsToDays } from "@/types/trip";
 import { hasValidCoordinates } from "@/lib/coordinates";
 import { tripPasswordHeaders } from "@/lib/trip-auth-client";
 import {
@@ -53,6 +55,8 @@ interface TripMapProps {
   shareToken?: string | null;
   readOnly?: boolean;
   title?: string;
+  /** Initial view — map (cards + map) or day plotter */
+  initialView?: TripViewMode;
 }
 
 export function TripMap({
@@ -63,17 +67,27 @@ export function TripMap({
   shareToken,
   readOnly,
   title = "Trip",
+  initialView = "map",
 }: TripMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [stops, setStops] = useState<EnrichedStop[]>(initialStops);
-  const [activeDay, setActiveDay] = useState<"all" | string>("all");
+  const [viewMode, setViewMode] = useState<TripViewMode>(initialView);
+  const [activeDay, setActiveDay] = useState<"all" | string>(() => {
+    if (initialView !== "plotter") return "all";
+    const first = initialStops.find((s) => s.dateStart)?.dateStart;
+    return first ?? "all";
+  });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<ActivitySuggestion[]>([]);
   const [copyFeedback, setCopyFeedback] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [pickingPinIndex, setPickingPinIndex] = useState<number | null>(null);
+  const [pickingPlotterItem, setPickingPlotterItem] = useState<{
+    date: string;
+    itemIndex: number;
+  } | null>(null);
   const [enrichingIndex, setEnrichingIndex] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState<SidebarCollapsedState>({
     summary: false,
@@ -327,6 +341,48 @@ export function TripMap({
     persistChange();
   }, [selectedIndex, filteredStops, stops, allowPinEdit, persistChange]);
 
+  const plotterDate =
+    activeDay !== "all"
+      ? activeDay
+      : tripDays.find((d) => d.dateStart)?.dateStart ?? null;
+
+  const plotterDay = useMemo(() => {
+    if (!plotterDate) return null;
+    return (
+      tripDays.find((d) => d.dateStart === plotterDate) ?? {
+        id: `day-${plotterDate}`,
+        dateStart: plotterDate,
+        dateEnd: plotterDate,
+        sortOrder: tripDays.length,
+        items: [] as TripItem[],
+      }
+    );
+  }, [tripDays, plotterDate]);
+
+  const handleViewChange = useCallback(
+    (mode: TripViewMode) => {
+      setViewMode(mode);
+      if (mode === "plotter" && activeDay === "all") {
+        const first = tripDays.find((d) => d.dateStart)?.dateStart;
+        if (first) setActiveDay(first);
+      }
+    },
+    [activeDay, tripDays]
+  );
+
+  const handlePlotterItemsChange = useCallback(
+    (date: string, items: TripItem[]) => {
+      if (!allowPinEdit) return;
+      setStops((prev) => replaceDayItems(prev, date, items));
+      persistChange();
+    },
+    [allowPinEdit, persistChange]
+  );
+
+  const handlePlotterSelectDate = useCallback((date: string) => {
+    setActiveDay(date);
+  }, []);
+
   const handleSuggestionsLoaded = useCallback((loaded: ActivitySuggestion[]) => {
     setSuggestions(loaded);
   }, []);
@@ -352,6 +408,7 @@ export function TripMap({
   }, [selectedIndex]);
 
   useEffect(() => {
+    if (viewMode !== "map") return;
     if (!mapContainer.current) return;
 
     const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
@@ -446,8 +503,9 @@ export function TripMap({
       suggestionMarkersRef.current.forEach((m) => m.remove());
       suggestionMarkersRef.current = [];
       map.current?.remove();
+      map.current = null;
     };
-  }, [filteredStops, mappedStops, flyTo]);
+  }, [viewMode, filteredStops, mappedStops, flyTo]);
 
   // Add suggestion markers when a stop is selected and suggestions are loaded
   useEffect(() => {
@@ -505,19 +563,12 @@ export function TripMap({
         <h2 className="text-sm font-semibold shrink-0">
           {filteredStops.length} stop{filteredStops.length !== 1 && "s"}
         </h2>
+        <TripViewToggle value={viewMode} onChange={handleViewChange} />
         <div className="ml-auto flex items-center gap-2 shrink-0">
           {enrichmentRate !== undefined && (
             <span className="text-xs text-foreground/40">
               {enrichmentRate}% enriched
             </span>
-          )}
-          {shareToken && (
-            <Link
-              href={`/trips/${shareToken}/edit`}
-              className="rounded-lg border border-foreground/15 px-3 py-1.5 text-xs font-medium hover:bg-foreground/5 transition cursor-pointer shrink-0"
-            >
-              Edit trip
-            </Link>
           )}
           {shareUrl && !readOnly && (
             <button
@@ -593,7 +644,7 @@ export function TripMap({
               collapsed={collapsed.calendar}
               onCollapsedChange={(next) => toggleSection("calendar", next)}
               headerAction={
-                activeDay !== "all" ? (
+                viewMode === "map" && activeDay !== "all" ? (
                   <button
                     type="button"
                     onClick={() => setActiveDay("all")}
@@ -606,13 +657,24 @@ export function TripMap({
             >
               <TripCalendar
                 days={tripDays}
-                selectedDate={activeDay === "all" ? null : activeDay}
-                onSelectDate={(date) => setActiveDay(date)}
+                selectedDate={
+                  viewMode === "plotter"
+                    ? plotterDate
+                    : activeDay === "all"
+                      ? null
+                      : activeDay
+                }
+                onSelectDate={
+                  viewMode === "plotter"
+                    ? handlePlotterSelectDate
+                    : (date) => setActiveDay(date)
+                }
                 showWeather={false}
               />
             </CollapsibleSection>
           )}
 
+          {viewMode === "map" && (
           <CollapsibleSection
             id="stops"
             title="Stops"
@@ -725,6 +787,7 @@ export function TripMap({
             )}
           </div>
           </CollapsibleSection>
+          )}
         </div>
 
         {/* Sidebar backdrop (mobile) */}
@@ -736,8 +799,34 @@ export function TripMap({
           />
         )}
 
-        {/* Map */}
-        <div ref={mapContainer} className="flex-1 min-w-0" />
+        {viewMode === "map" ? (
+          <div ref={mapContainer} className="flex-1 min-w-0" />
+        ) : (
+          <div className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-4 bg-foreground/[0.01]">
+            {plotterDate && plotterDay ? (
+              <DayPlotter
+                date={plotterDate}
+                dayName={plotterDay.name}
+                items={plotterDay.items}
+                onChangeItems={
+                  allowPinEdit
+                    ? (items) => handlePlotterItemsChange(plotterDate, items)
+                    : () => {}
+                }
+                onSetLocation={
+                  allowPinEdit
+                    ? (itemIndex) =>
+                        setPickingPlotterItem({ date: plotterDate, itemIndex })
+                    : undefined
+                }
+              />
+            ) : (
+              <div className="h-full min-h-[16rem] flex items-center justify-center rounded-xl border border-dashed border-foreground/15 text-sm text-foreground/50">
+                Select a day on the calendar to plot activities
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {pickingPinIndex !== null && filteredStops[pickingPinIndex] && (
@@ -787,6 +876,61 @@ export function TripMap({
           onCancel={() => setPickingPinIndex(null)}
         />
       )}
+
+      {pickingPlotterItem &&
+        plotterDay &&
+        plotterDay.items[pickingPlotterItem.itemIndex] && (
+          <MapPicker
+            initialCenter={
+              mapView?.center ??
+              (mappedStops.length > 0
+                ? {
+                    lat:
+                      mappedStops.reduce((s, p) => s + p.latitude, 0) /
+                      mappedStops.length,
+                    lon:
+                      mappedStops.reduce((s, p) => s + p.longitude, 0) /
+                      mappedStops.length,
+                  }
+                : undefined)
+            }
+            initialZoom={mapView?.zoom}
+            initialQuery={
+              plotterDay.items[pickingPlotterItem.itemIndex].name
+            }
+            latitude={
+              hasValidCoordinates(
+                plotterDay.items[pickingPlotterItem.itemIndex]
+              )
+                ? plotterDay.items[pickingPlotterItem.itemIndex].latitude
+                : undefined
+            }
+            longitude={
+              hasValidCoordinates(
+                plotterDay.items[pickingPlotterItem.itemIndex]
+              )
+                ? plotterDay.items[pickingPlotterItem.itemIndex].longitude
+                : undefined
+            }
+            onSelect={(lat, lon) => {
+              const { date, itemIndex } = pickingPlotterItem;
+              const day = stopsToDays(stops).find((d) => d.dateStart === date);
+              if (!day) {
+                setPickingPlotterItem(null);
+                return;
+              }
+              const items = [...day.items];
+              items[itemIndex] = {
+                ...items[itemIndex],
+                latitude: lat,
+                longitude: lon,
+              };
+              handlePlotterItemsChange(date, items);
+              setPickingPlotterItem(null);
+            }}
+            onCancel={() => setPickingPlotterItem(null)}
+          />
+        )}
     </div>
   );
 }

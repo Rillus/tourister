@@ -86,6 +86,47 @@ export function stopsToDays(stopList: EnrichedStop[]): TripDay[] {
   });
 }
 
+/**
+ * Replace all items for a calendar day in a flat stop list.
+ * Other days are left intact; missing days are appended.
+ */
+export function replaceDayItems(
+  stops: EnrichedStop[],
+  date: string,
+  items: TripItem[]
+): EnrichedStop[] {
+  const days = stopsToDays(stops);
+  const nextItems = items.map((item) => ({
+    ...item,
+    dateStart: date,
+    dateEnd: item.dateEnd ?? date,
+  }));
+  const idx = days.findIndex((d) => d.dateStart === date);
+  if (idx >= 0) {
+    days[idx] = { ...days[idx], items: nextItems };
+  } else {
+    days.push({
+      id: `day-${date}`,
+      dateStart: date,
+      dateEnd: date,
+      sortOrder: days.length,
+      items: nextItems,
+    });
+  }
+  days.sort((a, b) => {
+    if (!a.dateStart) return 1;
+    if (!b.dateStart) return -1;
+    return a.dateStart.localeCompare(b.dateStart);
+  });
+  return days.flatMap((day) =>
+    sortItemsByTime(day.items).map((item) => ({
+      ...item,
+      dateStart: day.dateStart,
+      dateEnd: day.dateEnd || day.dateStart,
+    }))
+  );
+}
+
 /** Earliest and latest YYYY-MM-DD across days (ignores empty) */
 export function tripDateRange(days: TripDay[]): {
   start: string | null;

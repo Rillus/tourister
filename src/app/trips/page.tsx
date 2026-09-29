@@ -207,13 +207,13 @@ export default function TripsPage() {
                       href={`/share/${trip.shareToken}`}
                       className="flex-1 min-w-[5.5rem] rounded-lg border border-foreground/15 px-3 py-1.5 text-sm font-medium hover:bg-foreground/5 transition text-center"
                     >
-                      View
+                      Map
                     </Link>
                     <Link
-                      href={`/trips/${trip.shareToken}/edit`}
+                      href={`/share/${trip.shareToken}?view=plotter`}
                       className="flex-1 min-w-[5.5rem] rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 transition text-center"
                     >
-                      Edit
+                      Plotter
                     </Link>
                     <button
                       type="button"
